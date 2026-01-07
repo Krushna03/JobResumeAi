@@ -11,7 +11,7 @@ const geminiapiKey = process.env.GEMINIAPIKEY;
 const genAI = new GoogleGenerativeAI(geminiapiKey);
 
 export const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
+  model: "gemini-2.5-flash-lite",
   generationConfig: {
     maxOutputTokens: 1000,
     temperature: 0.3,
@@ -35,18 +35,3 @@ connectDB()
   })
 
 export default app
-  
-
-
-// import { OAuth2Client } from 'google-auth-library';
-// export const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-  // const geminiapiKey = process.env.GEMINIAPIKEY;
-  // const genAI = new GoogleGenerativeAI(geminiapiKey);
-  
-  // export const model = genAI.getGenerativeModel({
-  //   model: "gemini-2.0-flash",
-  //   generationConfig: {
-  //     maxOutputTokens: 1000,
-  //     temperature: 0.3,
-  //   }
-  // });
