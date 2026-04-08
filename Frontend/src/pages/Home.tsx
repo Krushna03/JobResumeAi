@@ -5,7 +5,6 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
 import { Upload, FileText, Zap, Target, CheckCircle, ArrowRight, Brain, Rocket } from "lucide-react"
 
 export default function Home() {
@@ -259,20 +258,6 @@ export default function Home() {
             </div>
             <h3 className="text-xl font-semibold mb-3 text-white">Get Tailored Resume</h3>
             <p className="text-gray-400">Download your optimized resume in seconds</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Trusted By Section */}
-      <section className="container mx-auto px-6 py-16">
-        <div className="text-center mb-12">
-          <p className="text-gray-400 text-sm mb-8">Trusted by fast-growing professionals</p>
-          <div className="flex items-center justify-center space-x-12 opacity-60">
-            <div className="text-white font-semibold text-lg">GOOGLE</div>
-            <div className="text-white font-semibold text-lg">MICROSOFT</div>
-            <div className="text-white font-semibold text-lg">AMAZON</div>
-            <div className="text-white font-semibold text-lg">APPLE</div>
-            <div className="text-white font-semibold text-lg">META</div>
           </div>
         </div>
       </section>

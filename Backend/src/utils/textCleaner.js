@@ -1,10 +1,4 @@
-/**
- * Enhanced text cleaning utilities for handling messy PDF extraction
- */
 
-/**
- * Detects and fixes concatenated words (e.g., "Engineerseeking" -> "Engineer seeking")
- */
 export function fixConcatenatedWords(text) {
   if (!text) return text;
   
@@ -44,9 +38,6 @@ export function fixConcatenatedWords(text) {
   return cleaned;
 }
 
-/**
- * Removes duplicate content blocks
- */
 export function removeDuplicates(text) {
   if (!text) return text;
   
@@ -97,9 +88,6 @@ export function removeDuplicates(text) {
   return uniqueBlocks.join('\n\n');
 }
 
-/**
- * Fixes corrupted text patterns (e.g., "CYGes Ph Aw" -> attempts to fix)
- */
 export function fixCorruptedText(text) {
   if (!text) return text;
   
@@ -129,9 +117,6 @@ export function fixCorruptedText(text) {
   return cleaned;
 }
 
-/**
- * Intelligently adds spaces between words using common resume patterns
- */
 export function intelligentSpaceInsertion(text) {
   if (!text) return text;
   
@@ -167,9 +152,6 @@ export function intelligentSpaceInsertion(text) {
   return cleaned;
 }
 
-/**
- * Main text cleaning function that applies all cleaning steps
- */
 export function cleanExtractedText(rawText) {
   if (!rawText) return rawText;
   
@@ -189,10 +171,10 @@ export function cleanExtractedText(rawText) {
   
   // Step 5: Normalize whitespace (preserve line breaks)
   // Only normalize multiple spaces within lines, not newlines
-  cleaned = cleaned.replace(/[ \t]+/g, ' '); // Replace multiple spaces/tabs with single space
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n'); // Normalize multiple newlines
-  cleaned = cleaned.replace(/[ \t]+\n/g, '\n'); // Remove trailing spaces before newlines
-  cleaned = cleaned.replace(/\n[ \t]+/g, '\n'); // Remove leading spaces after newlines
+  cleaned = cleaned.replace(/[ \t]+/g, ' '); 
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n'); 
+  cleaned = cleaned.replace(/[ \t]+\n/g, '\n'); 
+  cleaned = cleaned.replace(/\n[ \t]+/g, '\n'); 
   
   return cleaned.trim();
 }
