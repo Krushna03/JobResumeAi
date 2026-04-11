@@ -24,13 +24,13 @@ const Hero = () => {
   ];
 
   return (
-    <section className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 flex items-center">
+    <section className="flex min-h-screen items-center bg-gradient-to-br from-[rgb(var(--brand-primary-rgb)/0.1)] via-[rgb(var(--brand-secondary-rgb)/0.06)] to-[rgb(var(--brand-tertiary-rgb)/0.12)]">
       <div className="container mx-auto px-4 py-16">
-        <div className="text-center max-w-4xl mx-auto">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+        <div className="mx-auto max-w-4xl text-center">
+          <h1 className="font-headline mb-6 text-5xl font-bold text-gradient-brand md:text-6xl">
             Create Perfect Resumes with AI
           </h1>
-          <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+          <p className="mb-8 text-xl leading-relaxed text-muted-foreground">
             Land your dream job with AI-powered resume customization. Tailor your resume to any job description in seconds and increase your chances of getting hired.
           </p>
           
@@ -41,7 +41,11 @@ const Hero = () => {
               </Button>
             </Link>
             <Link to="/templates">
-              <Button size="lg" variant="outline" className="px-8 py-3 hover:bg-gray-50 transition-all duration-300 hover:scale-105">
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-border bg-background/80 px-8 py-3 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-muted/80"
+              >
                 View Templates
               </Button>
             </Link>
@@ -49,12 +53,15 @@ const Hero = () => {
           
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {features.map((feature, index) => (
-              <Card key={index} className="p-6 bg-white/60 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 cursor-pointer group">
-                <div className="w-12 h-12 gradient-accent rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <feature.icon className="w-6 h-6 text-white" />
+              <Card
+                key={index}
+                className="group cursor-pointer border-border/60 bg-card/70 p-6 shadow-lg backdrop-blur-md transition-all duration-300 hover:-translate-y-2 hover:shadow-xl"
+              >
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg gradient-accent transition-transform duration-300 group-hover:scale-110">
+                  <feature.icon className="h-6 w-6 text-white" />
                 </div>
-                <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
-                <p className="text-gray-600">{feature.description}</p>
+                <h3 className="font-headline mb-3 text-xl font-semibold text-foreground">{feature.title}</h3>
+                <p className="text-muted-foreground">{feature.description}</p>
               </Card>
             ))}
           </div>

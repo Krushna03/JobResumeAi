@@ -1,17 +1,20 @@
 
 import { useState } from "react";
 import Header from "@/components/Header";
+import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Eye } from "lucide-react";
+import { FileText, Eye, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useRequireAuthAction } from "@/hooks/useRequireAuthAction";
 
 const Templates = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const navigate = useNavigate();
   const { toast } = useToast();
+  const requireAuth = useRequireAuthAction();
 
   const templates = [
     {
@@ -86,16 +89,25 @@ const Templates = () => {
     navigate("/builder", { state: { selectedTemplate: template } });
   };
 
+  const handleDownloadTemplate = (template: any) => {
+    requireAuth(() => {
+      toast({
+        title: "Download started",
+        description: `Preparing ${template.name} as PDF.`,
+      });
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <PageShell>
       <Header />
-      
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+
+      <div className="container mx-auto px-4 py-8 md:px-6">
+        <div className="mb-12 text-center">
+          <h1 className="font-headline mb-4 text-4xl font-bold tracking-tight text-gradient-brand md:text-5xl">
             Resume Templates
           </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="mx-auto max-w-2xl text-lg text-muted-foreground md:text-xl">
             Choose from our collection of professionally designed, ATS-friendly resume templates
           </p>
         </div>
@@ -118,16 +130,19 @@ const Templates = () => {
         {/* Templates Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredTemplates.map((template) => (
-            <Card key={template.id} className="overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
-              <div className="aspect-[3/4] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                <FileText className="w-16 h-16 text-gray-400" />
+            <Card
+              key={template.id}
+              className="overflow-hidden border-border bg-card/80 shadow-sm backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+            >
+              <div className="flex aspect-[3/4] items-center justify-center bg-gradient-to-br from-muted to-muted/60">
+                <FileText className="h-16 w-16 text-muted-foreground" />
               </div>
               <div className="p-6">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="text-xl font-semibold">{template.name}</h3>
                   <Badge variant="secondary">{template.category}</Badge>
                 </div>
-                <p className="text-gray-600 mb-4">{template.description}</p>
+                <p className="mb-4 text-muted-foreground">{template.description}</p>
                 <div className="flex flex-wrap gap-1 mb-4">
                   {template.tags.map((tag) => (
                     <Badge key={tag} variant="outline" className="text-xs">
@@ -135,22 +150,34 @@ const Templates = () => {
                     </Badge>
                   ))}
                 </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1"
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    className="min-w-0 flex-1"
                     onClick={() => handlePreview(template)}
                   >
-                    <Eye className="w-4 h-4 mr-1" />
+                    <Eye className="w-4 h-4 mr-1 shrink-0" />
                     Preview
                   </Button>
-                  <Button 
-                    size="sm" 
-                    className="flex-1 gradient-primary text-white border-0"
+                  <Button
+                    size="sm"
+                    type="button"
+                    className="min-w-0 flex-1 gradient-primary text-white border-0"
                     onClick={() => handleUseTemplate(template)}
                   >
                     Use Template
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    type="button"
+                    className="w-full sm:w-auto sm:flex-1"
+                    onClick={() => handleDownloadTemplate(template)}
+                  >
+                    <Download className="w-4 h-4 mr-1 shrink-0" />
+                    Download PDF
                   </Button>
                 </div>
               </div>
@@ -159,14 +186,14 @@ const Templates = () => {
         </div>
 
         {filteredTemplates.length === 0 && (
-          <div className="text-center py-12">
-            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No templates found</h3>
-            <p className="text-gray-600">Try selecting a different category</p>
+          <div className="py-12 text-center">
+            <FileText className="mx-auto mb-4 h-16 w-16 text-muted-foreground/50" />
+            <h3 className="font-headline text-xl font-semibold text-foreground">No templates found</h3>
+            <p className="mt-2 text-muted-foreground">Try selecting a different category</p>
           </div>
         )}
       </div>
-    </div>
+q    </PageShell>
   );
 };
 

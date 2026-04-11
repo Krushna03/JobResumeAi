@@ -1,15 +1,26 @@
-
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
-import { Upload, FileText, Download } from "lucide-react";
+import { PageShell } from "@/components/PageShell";
+import { Download } from "lucide-react";
+import { useRequireAuthAction } from "@/hooks/useRequireAuthAction";
+import { useToast } from "@/hooks/use-toast";
+
+type TemplateState = { id: number; name: string; category?: string };
 
 const Builder = () => {
+  const location = useLocation();
+  const { toast } = useToast();
+  const requireAuth = useRequireAuthAction();
+  const selectedTemplate = (location.state as { selectedTemplate?: TemplateState } | null)
+    ?.selectedTemplate;
   const [resumeData, setResumeData] = useState({
     name: "John Doe",
     email: "john.doe@email.com",
@@ -23,35 +34,59 @@ const Builder = () => {
   const [jobDescription, setJobDescription] = useState("");
   const [isCustomizing, setIsCustomizing] = useState(false);
 
-  const handleCustomize = async () => {
+  const runCustomize = () => {
     setIsCustomizing(true);
-    // Simulate AI processing
     setTimeout(() => {
-      setResumeData(prev => ({
+      setResumeData((prev) => ({
         ...prev,
-        summary: "Results-driven Computer Science student with expertise in full-stack development and proven experience in agile software development environments.",
-        skills: "JavaScript, React.js, Node.js, Python, SQL, Git, Agile Development"
+        summary:
+          "Results-driven Computer Science student with expertise in full-stack development and proven experience in agile software development environments.",
+        skills: "JavaScript, React.js, Node.js, Python, SQL, Git, Agile Development",
       }));
       setIsCustomizing(false);
     }, 2000);
   };
 
+  const handleCustomize = () => {
+    requireAuth(runCustomize);
+  };
+
+  const handleDownloadPdf = () => {
+    requireAuth(() => {
+      toast({
+        title: "Download started",
+        description: "Your resume PDF is being prepared.",
+      });
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <PageShell>
       <Header />
-      
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Resume Builder</h1>
-          <p className="text-gray-600">Create and customize your resume with AI assistance</p>
+
+      <div className="container mx-auto px-4 py-8 md:px-6">
+        <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="font-headline text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+              Resume Builder
+            </h1>
+            <p className="mt-2 text-muted-foreground">
+              Create and customize your resume with AI assistance
+            </p>
+          </div>
+          {selectedTemplate?.name ? (
+            <Badge variant="secondary" className="w-fit shrink-0 text-sm">
+              Template: {selectedTemplate.name}
+            </Badge>
+          ) : null}
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Editor Panel */}
           <div className="space-y-6">
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Resume Information</h2>
-              
+            <Card className="border-border bg-card/80 p-6 shadow-sm backdrop-blur-sm">
+              <h2 className="mb-4 font-headline text-xl font-semibold text-foreground">Resume Information</h2>
+
               <Tabs defaultValue="basic" className="w-full">
                 <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="basic">Basic</TabsTrigger>
@@ -138,8 +173,8 @@ const Builder = () => {
             </Card>
 
             {/* AI Customization Panel */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">AI Resume Customization</h2>
+            <Card className="border-border bg-card/80 p-6 shadow-sm backdrop-blur-sm">
+              <h2 className="mb-4 font-headline text-xl font-semibold text-foreground">AI Resume Customization</h2>
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="job-description">Paste Job Description</Label>
@@ -151,7 +186,8 @@ const Builder = () => {
                     rows={6}
                   />
                 </div>
-                <Button 
+                <Button
+                  type="button"
                   onClick={handleCustomize}
                   disabled={!jobDescription || isCustomizing}
                   className="w-full gradient-primary text-white border-0"
@@ -164,49 +200,55 @@ const Builder = () => {
 
           {/* Preview Panel */}
           <div className="space-y-6">
-            <Card className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Resume Preview</h2>
-                <Button variant="outline" size="sm">
+            <Card className="border-border bg-card/80 p-6 shadow-sm backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="font-headline text-xl font-semibold text-foreground">Resume Preview</h2>
+                <Button variant="outline" size="sm" type="button" onClick={handleDownloadPdf}>
                   <Download className="w-4 h-4 mr-2" />
                   Download PDF
                 </Button>
               </div>
               
-              {/* Resume Preview */}
-              <div className="bg-white p-8 shadow-lg min-h-[600px] border">
-                <div className="text-center mb-6">
-                  <h1 className="text-2xl font-bold text-gray-900">{resumeData.name}</h1>
-                  <p className="text-gray-600">{resumeData.email} | {resumeData.phone}</p>
+              {/* Resume preview: light “paper” in both themes for print-like contrast */}
+              <div className="min-h-[600px] rounded-xl border border-border bg-neutral-50 p-8 text-neutral-900 shadow-inner dark:bg-card dark:text-card-foreground">
+                <div className="mb-6 text-center">
+                  <h3 className="font-headline text-2xl font-bold text-neutral-950 dark:text-foreground">
+                    {resumeData.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-neutral-600 dark:text-muted-foreground">
+                    {resumeData.email} | {resumeData.phone}
+                  </p>
                 </div>
-                
+
                 <div className="space-y-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-1 mb-2">
+                    <h4 className="mb-2 border-b border-neutral-200 pb-1 text-lg font-semibold text-neutral-950 dark:border-border dark:text-foreground">
                       Professional Summary
-                    </h2>
-                    <p className="text-gray-700 text-sm leading-relaxed">{resumeData.summary}</p>
+                    </h4>
+                    <p className="text-sm leading-relaxed text-neutral-800 dark:text-muted-foreground">
+                      {resumeData.summary}
+                    </p>
                   </div>
-                  
+
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-1 mb-2">
+                    <h4 className="mb-2 border-b border-neutral-200 pb-1 text-lg font-semibold text-neutral-950 dark:border-border dark:text-foreground">
                       Experience
-                    </h2>
-                    <p className="text-gray-700 text-sm">{resumeData.experience}</p>
+                    </h4>
+                    <p className="text-sm text-neutral-800 dark:text-muted-foreground">{resumeData.experience}</p>
                   </div>
-                  
+
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-1 mb-2">
+                    <h4 className="mb-2 border-b border-neutral-200 pb-1 text-lg font-semibold text-neutral-950 dark:border-border dark:text-foreground">
                       Education
-                    </h2>
-                    <p className="text-gray-700 text-sm">{resumeData.education}</p>
+                    </h4>
+                    <p className="text-sm text-neutral-800 dark:text-muted-foreground">{resumeData.education}</p>
                   </div>
-                  
+
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-1 mb-2">
+                    <h4 className="mb-2 border-b border-neutral-200 pb-1 text-lg font-semibold text-neutral-950 dark:border-border dark:text-foreground">
                       Skills
-                    </h2>
-                    <p className="text-gray-700 text-sm">{resumeData.skills}</p>
+                    </h4>
+                    <p className="text-sm text-neutral-800 dark:text-muted-foreground">{resumeData.skills}</p>
                   </div>
                 </div>
               </div>
@@ -214,7 +256,7 @@ const Builder = () => {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

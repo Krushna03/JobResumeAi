@@ -1,6 +1,5 @@
-
 import { useState } from "react";
-import Header from "@/components/Header";
+import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -56,19 +55,24 @@ const Dashboard = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Applied": return "bg-blue-100 text-blue-800";
-      case "In Review": return "bg-yellow-100 text-yellow-800";
-      case "Interview": return "bg-green-100 text-green-800";
-      case "Rejected": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "Applied":
+        return "bg-primary/15 text-primary";
+      case "In Review":
+        return "bg-amber-500/15 text-amber-800 dark:text-amber-300";
+      case "Interview":
+        return "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300";
+      case "Rejected":
+        return "bg-destructive/15 text-destructive";
+      default:
+        return "bg-muted text-muted-foreground";
     }
   };
 
   const getMatchColor = (percentage: number) => {
-    if (percentage >= 90) return "text-green-600";
-    if (percentage >= 80) return "text-blue-600";
-    if (percentage >= 70) return "text-yellow-600";
-    return "text-red-600";
+    if (percentage >= 90) return "text-emerald-600 dark:text-emerald-400";
+    if (percentage >= 80) return "text-primary";
+    if (percentage >= 70) return "text-amber-600 dark:text-amber-400";
+    return "text-destructive";
   };
 
   const filteredResumes = savedResumes.filter(resume => {
@@ -101,14 +105,14 @@ const Dashboard = () => {
   const statusOptions = ["All Status", "Applied", "In Review", "Interview", "Rejected"];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+    <DashboardLayout>
+      <div className="container mx-auto px-4 py-8 md:px-6">
+        <div className="mb-8 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Resume Dashboard</h1>
-            <p className="text-gray-600">Manage your tailored resumes and track applications</p>
+            <h1 className="font-headline text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+              Resume Dashboard
+            </h1>
+            <p className="mt-2 text-muted-foreground">Manage your tailored resumes and track applications</p>
           </div>
           <Button 
             className="gradient-primary text-white border-0"
@@ -120,30 +124,30 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
-          <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-            <div className="text-2xl font-bold text-primary mb-1">12</div>
-            <div className="text-sm text-gray-600">Total Resumes</div>
+        <div className="mb-8 grid gap-6 md:grid-cols-4">
+          <Card className="border-border bg-card p-6 text-center shadow-sm transition-shadow hover:shadow-md">
+            <div className="mb-1 text-2xl font-bold text-primary">12</div>
+            <div className="text-sm text-muted-foreground">Total Resumes</div>
           </Card>
-          <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-            <div className="text-2xl font-bold text-green-600 mb-1">4</div>
-            <div className="text-sm text-gray-600">Applications Sent</div>
+          <Card className="border-border bg-card p-6 text-center shadow-sm transition-shadow hover:shadow-md">
+            <div className="mb-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">4</div>
+            <div className="text-sm text-muted-foreground">Applications Sent</div>
           </Card>
-          <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-            <div className="text-2xl font-bold text-blue-600 mb-1">2</div>
-            <div className="text-sm text-gray-600">Interviews</div>
+          <Card className="border-border bg-card p-6 text-center shadow-sm transition-shadow hover:shadow-md">
+            <div className="mb-1 text-2xl font-bold text-primary">2</div>
+            <div className="text-sm text-muted-foreground">Interviews</div>
           </Card>
-          <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-            <div className="text-2xl font-bold text-purple-600 mb-1">89%</div>
-            <div className="text-sm text-gray-600">Avg. Match Score</div>
+          <Card className="border-border bg-card p-6 text-center shadow-sm transition-shadow hover:shadow-md">
+            <div className="mb-1 text-2xl font-bold text-brand-tertiary">89%</div>
+            <div className="text-sm text-muted-foreground">Avg. Match Score</div>
           </Card>
         </div>
 
         {/* Search and Filter */}
-        <Card className="p-6 mb-6">
+        <Card className="mb-6 border-border bg-card p-6 shadow-sm">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by job title or company..."
                 value={searchTerm}
@@ -175,16 +179,16 @@ const Dashboard = () => {
         {/* Resumes List */}
         <div className="space-y-4">
           {filteredResumes.map((resume) => (
-            <Card key={resume.id} className="p-6 hover:shadow-lg transition-shadow">
+            <Card key={resume.id} className="border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold">{resume.title}</h3>
+                    <h3 className="font-headline text-lg font-semibold text-foreground">{resume.title}</h3>
                     <Badge className={getStatusColor(resume.status)}>
                       {resume.status}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span>{resume.company}</span>
                     <span>•</span>
                     <span>{resume.date}</span>
@@ -198,7 +202,7 @@ const Dashboard = () => {
                     <div className={`text-lg font-bold ${getMatchColor(resume.matchPercentage)}`}>
                       {resume.matchPercentage}%
                     </div>
-                    <div className="text-xs text-gray-500">Match</div>
+                    <div className="text-xs text-muted-foreground">Match</div>
                   </div>
                   
                   <div className="flex gap-2">
@@ -226,10 +230,10 @@ const Dashboard = () => {
         </div>
 
         {filteredResumes.length === 0 && (
-          <Card className="p-12 text-center">
-            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No resumes found</h3>
-            <p className="text-gray-600 mb-4">
+          <Card className="border-border bg-card p-12 text-center shadow-sm">
+            <FileText className="mx-auto mb-4 h-16 w-16 text-muted-foreground/50" />
+            <h3 className="font-headline text-xl font-semibold text-foreground">No resumes found</h3>
+            <p className="mb-4 mt-2 text-muted-foreground">
               {searchTerm ? "Try adjusting your search terms" : "Create your first resume to get started"}
             </p>
             <Button 
@@ -241,7 +245,7 @@ const Dashboard = () => {
           </Card>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 };
 

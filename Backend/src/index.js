@@ -1,11 +1,7 @@
-import { app } from './app.js'
+import "dotenv/config";
+import { app } from "./app.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import dotenv from 'dotenv'
-import connectDB from './config/db.js'
-
-dotenv.config({
-  path: "./.env"
-})
+import connectDB from "./config/db.js";
 
 const geminiapiKey = process.env.GEMINIAPIKEY;
 const genAI = new GoogleGenerativeAI(geminiapiKey);
@@ -34,19 +30,4 @@ connectDB()
     console.log('MongoDBconnection failed !!!', error)
   })
 
-export default app
-  
-
-
-// import { OAuth2Client } from 'google-auth-library';
-// export const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-  // const geminiapiKey = process.env.GEMINIAPIKEY;
-  // const genAI = new GoogleGenerativeAI(geminiapiKey);
-  
-  // export const model = genAI.getGenerativeModel({
-  //   model: "gemini-2.0-flash",
-  //   generationConfig: {
-  //     maxOutputTokens: 1000,
-  //     temperature: 0.3,
-  //   }
-  // });
+export default app;

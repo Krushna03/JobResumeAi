@@ -1,171 +1,135 @@
-import UserModel from "../model/User.models.js"; 
+import UserModel from "../model/User.models.js";
+import { generateAccessAndRefreshTokens } from "../utils/generateTokens.js";
+import { accessTokenCookieOptions, clearAccessTokenCookieOptions } from "../utils/cookieOptions.js";
 
-
-const generateAccessAndRefreshTokens = async (userID) => {
-  try {
-    const user = await UserModel.findById(userID)
-
-    const accessToken = await user.generateAccessToken()
-    const refreshToken = await user.generateRefreshToken()
-
-    user.refreshToken = refreshToken
-    await user.save({ validateBeforeSave: false}) 
-
-    return {accessToken, refreshToken}
-
-  } catch (error) {
-    console.error("Token generation error:", error);
-    throw new Error("Something went wrong while generating tokens.");
-  }
-}
-
-
+const userPublicFields = "-password -refreshToken";
 
 const register = async (req, res) => {
+  try {
     const { username, email, password } = req.body;
 
-    const existingUser = await UserModel.findOne({email});
-
-    if (existingUser) {
-      return res.status(500).json(
-        {
-          success: false,
-          message: 'User already Exists',
-        }
-      );
+    if (!username?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Username, email, and password are required.",
+      });
     }
 
-      const user = await UserModel.create({
-        username,
-        email,
-        password,
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters.",
       });
+    }
 
-      if (!user) {
-        return res.status(500).json(
-          {
-            success: false,
-            message: "Error registering user | Try registering again !",
-          },
-        );
-      }
+    const existingUser = await UserModel.findOne({ email: email.trim().toLowerCase() });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "An account with this email already exists.",
+      });
+    }
 
-      const { accessToken } = await generateAccessAndRefreshTokens(user?._id) 
-      
-      const options = {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-      }
-  
-      return res.status(200) 
-        .cookie('accessToken', accessToken, options)
-        .json({
-            success: true,
-            message: 'User registered successfully.',
-            data: { user, accessToken }
-        }
-      );
-}
+    const user = await UserModel.create({
+      username: username.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      authProvider: "local",
+    });
 
+    const { accessToken } = await generateAccessAndRefreshTokens(user._id);
+    const safeUser = await UserModel.findById(user._id).select(userPublicFields);
 
+    return res
+      .status(201)
+      .cookie("accessToken", accessToken, accessTokenCookieOptions())
+      .json({
+        success: true,
+        message: "Account created successfully.",
+        data: { user: safeUser, accessToken },
+      });
+  } catch (error) {
+    console.error("register:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Could not create account. Please try again.",
+    });
+  }
+};
 
 const login = async (req, res) => {
-    const {email, password} = req.body
+  try {
+    const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(500).json(
-        {
-          success: false,
-          message: "username or email is required !",
-        },
-      );
+    if (!email?.trim() || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required.",
+      });
     }
 
-    const user = await UserModel.findOne({ email })
-
+    const user = await UserModel.findOne({ email: email.trim().toLowerCase() });
     if (!user) {
-      return res.status(500).json(
-        {
-          success: false,
-          message: "User does not exist. Please enter correct email !",
-        },
-      );
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password.",
+      });
     }
 
-    const isPaswordValidate = await user.isPasswordCorrect(password)
-
-    if (!isPaswordValidate) {
-      return res.status(500).json(
-        {
-          success: false,
-          message: "Password does not matched, Please enter correct password !",
-        }
-      );
+    const valid = await user.isPasswordCorrect(password);
+    if (!valid) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password.",
+      });
     }
 
-    const {accessToken} = await generateAccessAndRefreshTokens(user._id)
+    const { accessToken } = await generateAccessAndRefreshTokens(user._id);
+    const loggedInUser = await UserModel.findById(user._id).select(userPublicFields);
 
-    const loggedInUser = await UserModel.findById(user._id).select("-password -refreshToken")
-
-    const options = {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, accessTokenCookieOptions())
+      .json({
+        success: true,
+        message: "Signed in successfully.",
+        data: { user: loggedInUser, accessToken },
+      });
+  } catch (error) {
+    console.error("login:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Could not sign in. Please try again.",
+    });
   }
-
-  return res.status(200)
-    .cookie('accessToken', accessToken, options)
-    .json(
-        {
-          user: loggedInUser, 
-          accessToken
-        },
-        "User logged In successFully"
-    )
-}
-
-
+};
 
 const currentUser = async (req, res) => {
-  const user = req.user;
-
-  return res.status(200)
-        .json({
-        success: true,
-        message: "Get current User Successfully",
-        data: user, 
-    })
-}
-
-
+  return res.status(200).json({
+    success: true,
+    message: "Current user",
+    data: req.user,
+  });
+};
 
 const logoutUser = async (req, res) => {
-    await UserModel.findByIdAndUpdate(
-      req.user?._id,
-      {
-        $unset: {
-          refreshToken: 1
-        }
-      },
-      {
-        new: true
-      }
-  )
+  try {
+    await UserModel.findByIdAndUpdate(req.user?._id, { $unset: { refreshToken: 1 } });
 
-  const options = {
-      httpOnly: true,
-      secure: true
+    return res
+      .status(200)
+      .clearCookie("accessToken", clearAccessTokenCookieOptions())
+      .json({
+        success: true,
+        message: "Signed out successfully.",
+      });
+  } catch (error) {
+    console.error("logout:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Could not sign out.",
+    });
   }
+};
 
-    return res.status(200)
-          .clearCookie("accessToken", options)
-          .json({
-            success: false,
-            message: "User Logged used successfully"
-          })
-} 
-
-
-
-export { register, login, logoutUser, currentUser}
+export { register, login, logoutUser, currentUser };

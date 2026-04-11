@@ -1,46 +1,34 @@
-import  jwt  from 'jsonwebtoken'
-import UserModel from '../model/User.models.js'
-
+import jwt from "jsonwebtoken";
+import UserModel from "../model/User.models.js";
 
 export const verifyJWT = async (req, res, next) => {
   try {
-      const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
-  
-      if (!token) {
-        return res.json(
-          {
-            success: false,
-            message: 'Unauthorized request',
-          },
-          { status: 500 }
-        );
-      }
-  
-      const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
+    const token =
+      req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")?.trim();
 
-      const account = await UserModel.findById(decodedToken?._id).select("-password -refreshToken");
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
 
-      if (!account) {
-        return res.json(
-          {
-            success: false,
-            message: 'Invalid access Token at verifyJWT for account',
-          },
-          { status: 500 }
-        );
-      }
+    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const account = await UserModel.findById(decodedToken?._id).select("-password -refreshToken");
 
-      req.user = account;       
+    if (!account) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired session",
+      });
+    }
 
-      next()
-    } 
-    catch (error) {
-      return res.json(
-        {
-          success: false,
-          message: error?.message || "Invalid access token",
-        },
-        { status: 500 }
-      );
+    req.user = account;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: error?.message || "Invalid access token",
+    });
   }
-}
+};

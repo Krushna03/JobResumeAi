@@ -41,13 +41,13 @@ const Index = () => {
       <Hero />
       
       {/* Stats Section */}
-      <section className="py-16 bg-white">
+      <section className="bg-background py-16">
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-4 gap-8 text-center">
             {stats.map((stat, index) => (
-              <div key={index} className="hover:scale-105 transition-transform duration-300">
-                <div className="text-3xl font-bold text-primary mb-2">{stat.value}</div>
-                <div className="text-gray-600">{stat.label}</div>
+              <div key={index} className="transition-transform duration-300 hover:scale-105">
+                <div className="mb-2 text-3xl font-bold text-primary">{stat.value}</div>
+                <div className="text-muted-foreground">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -55,11 +55,11 @@ const Index = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-16 bg-gray-50">
+      <section className="bg-muted/40 py-16">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Why Choose ResumeAI?</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <div className="mb-12 text-center">
+            <h2 className="font-headline mb-4 text-3xl font-bold">Why Choose ResumeAI?</h2>
+            <p className="mx-auto max-w-2xl text-xl text-muted-foreground">
               Our AI-powered platform gives you the edge you need in today's competitive job market
             </p>
           </div>
@@ -70,7 +70,7 @@ const Index = () => {
                 <span className="text-white font-bold">AI</span>
               </div>
               <h3 className="text-xl font-semibold mb-3">Smart AI Customization</h3>
-              <p className="text-gray-600">Our AI analyzes job descriptions and optimizes your resume for maximum impact</p>
+              <p className="text-muted-foreground">Our AI analyzes job descriptions and optimizes your resume for maximum impact</p>
             </Card>
             
             <Card className="p-6 text-center hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
@@ -78,7 +78,7 @@ const Index = () => {
                 <span className="text-white font-bold">ATS</span>
               </div>
               <h3 className="text-xl font-semibold mb-3">ATS-Friendly</h3>
-              <p className="text-gray-600">All templates are optimized to pass Applicant Tracking Systems</p>
+              <p className="text-muted-foreground">All templates are optimized to pass Applicant Tracking Systems</p>
             </Card>
             
             <Card className="p-6 text-center hover:shadow-xl transition-all duration-300 hover:-translate-y-2">
@@ -86,33 +86,33 @@ const Index = () => {
                 <span className="text-white font-bold">∞</span>
               </div>
               <h3 className="text-xl font-semibold mb-3">Unlimited Customizations</h3>
-              <p className="text-gray-600">Create as many tailored versions as you need for different job applications</p>
+              <p className="text-muted-foreground">Create as many tailored versions as you need for different job applications</p>
             </Card>
           </div>
         </div>
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-16 bg-white">
+      <section className="bg-background py-16">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Success Stories</h2>
-            <p className="text-xl text-gray-600">See how ResumeAI helped others land their dream jobs</p>
+          <div className="mb-12 text-center">
+            <h2 className="font-headline mb-4 text-3xl font-bold">Success Stories</h2>
+            <p className="text-xl text-muted-foreground">See how ResumeAI helped others land their dream jobs</p>
           </div>
           
           <div className="grid md:grid-cols-3 gap-8">
             {testimonials.map((testimonial, index) => (
               <Card key={index} className="p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                 <div className="flex items-center mb-4">
-                  <div className="w-12 h-12 bg-gradient-to-r from-purple-400 to-blue-400 rounded-full flex items-center justify-center text-white font-semibold mr-4">
+                  <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-r from-brand-primary to-brand-secondary font-semibold text-primary-foreground">
                     {testimonial.avatar}
                   </div>
                   <div>
                     <div className="font-semibold">{testimonial.name}</div>
-                    <div className="text-sm text-gray-600">{testimonial.role}</div>
+                    <div className="text-sm text-muted-foreground">{testimonial.role}</div>
                   </div>
                 </div>
-                <p className="text-gray-700 italic">"{testimonial.content}"</p>
+                <p className="italic text-foreground/90">&quot;{testimonial.content}&quot;</p>
               </Card>
             ))}
           </div>
@@ -122,18 +122,18 @@ const Index = () => {
       {/* CTA Section */}
       <section className="py-16 gradient-primary">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-white mb-4">Ready to Get Started?</h2>
+          <h2 className="font-headline mb-4 text-3xl font-bold text-white">Ready to Get Started?</h2>
           <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
             Join thousands of job seekers who have successfully landed their dream jobs with ResumeAI
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/builder">
-              <Button className="px-8 py-3 bg-white text-purple-600 font-semibold rounded-lg hover:bg-gray-100 transition-all duration-300 hover:scale-105">
+              <Button className="rounded-lg bg-white px-8 py-3 font-semibold text-primary transition-all duration-300 hover:scale-105 hover:bg-neutral-100">
                 Start Building Now
               </Button>
             </Link>
             <Link to="/templates">
-              <Button variant="outline" className="px-8 py-3 border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-purple-600 transition-all duration-300 hover:scale-105">
+              <Button variant="outline" className="rounded-lg border-2 border-white px-8 py-3 font-semibold text-white transition-all duration-300 hover:scale-105 hover:bg-white hover:text-primary">
                 View Templates
               </Button>
             </Link>
