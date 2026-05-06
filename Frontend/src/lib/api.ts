@@ -1,6 +1,6 @@
 export const AUTH_TOKEN_KEY = "jobresumeai_access_token";
 
-function getApiBase(): string {
+export function getApiBase(): string {
   const raw = import.meta.env.VITE_API_URL;
   let base =
     typeof raw === "string" && raw.trim() !== ""

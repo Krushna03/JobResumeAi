@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import Home from "./pages/Home";
 import Tailor from "./pages/Tailor";
+import ResumePreview from "./pages/ResumePreview";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 
@@ -27,6 +28,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/tailor" element={<Tailor />} />
+          <Route path="/resume-preview" element={<ResumePreview />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/builder" element={<Builder />} />

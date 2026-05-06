@@ -57,10 +57,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                   <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem asChild>
-                  <Link to="/">Back to site</Link>
-                </DropdownMenuItem>
+              <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuItem onClick={() => void logout()}>Log out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

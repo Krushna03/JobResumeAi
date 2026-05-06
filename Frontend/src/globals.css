@@ -128,3 +128,19 @@
 html {
   font-family: var(--font-sans);
 }
+
+.element-selector::-webkit-scrollbar {
+  display: none;
+}
+
+.pdf-viewer-no-scrollbar,
+.pdf-viewer-no-scrollbar * {
+  -ms-overflow-style: none;  
+  scrollbar-width: none;
+}
+.pdf-viewer-no-scrollbar ::-webkit-scrollbar,
+.pdf-viewer-no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

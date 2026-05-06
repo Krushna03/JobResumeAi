@@ -7,13 +7,14 @@ const geminiapiKey = process.env.GEMINIAPIKEY;
 const genAI = new GoogleGenerativeAI(geminiapiKey);
 
 export const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash",
+  model: "gemini-flash-latest",
   generationConfig: {
     maxOutputTokens: 1000,
     temperature: 0.3,
   }
 });
-app.get('/', (req, res) => {
+
+app.get('/', (_, res) => {
   res.send('Hello');
 });
 

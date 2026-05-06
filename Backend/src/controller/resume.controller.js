@@ -1023,7 +1023,11 @@ export const createNewResume = async (req, res) => {
     const resumeData = parseResumeData(tailoredResumeText);
 
     const outputFileName = `tailored-resume-${Date.now()}.pdf`;
-    const outputPath = path.join('uploads', outputFileName);
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const outputPath = path.join(uploadsDir, outputFileName);
 
     await createATSFriendlyPDF(resumeData, outputPath);
     fs.unlinkSync(resumeFile?.path);

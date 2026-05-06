@@ -1,14 +1,27 @@
 import type React from "react"
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, FileText, ArrowRight, Rocket } from "lucide-react"
+import { Upload, FileText, ArrowRight, Rocket, Loader2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { getApiBase, getStoredToken } from "@/lib/api"
+
+type GenerateResumeSuccess = {
+  success: boolean
+  message?: string
+  downloadUrl?: string
+  fileName?: string
+}
 
 export function HomeResumeGenerator() {
+  const { toast } = useToast()
+  const navigate = useNavigate()
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [jobDescription, setJobDescription] = useState("")
   const [dragActive, setDragActive] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -36,9 +49,82 @@ export function HomeResumeGenerator() {
     }
   }
 
-  const handleGenerate = () => {
-    if (resumeFile && jobDescription.trim()) {
-      console.log("Generating resume with:", { resumeFile, jobDescription })
+  const handleGenerate = async () => {
+    if (!resumeFile || !jobDescription.trim()) return
+
+    const isPdf = resumeFile.type === "application/pdf" || resumeFile.name.toLowerCase().endsWith(".pdf")
+    
+    if (!isPdf) {
+      toast({
+        title: "PDF required",
+        description: "Tailoring currently supports PDF resumes. Please convert your file to PDF and try again.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsGenerating(true)
+    try {
+      const formData = new FormData()
+      formData.append("resume", resumeFile)
+      formData.append("jobDescription", jobDescription.trim())
+
+      const headers = new Headers()
+      const token = getStoredToken()
+      if (token) headers.set("Authorization", `Bearer ${token}`)
+
+      const res = await fetch(`${getApiBase()}/api/v1/resume/generate-resume`, {
+        method: "POST",
+        body: formData,
+        headers,
+        credentials: "include",
+      })
+
+      const text = await res.text();
+
+      let data: unknown = {}
+      if (text) {
+        try {
+          data = JSON.parse(text)
+        } catch {
+          data = { message: text }
+        }
+      }
+
+      if (!res.ok) {
+        const obj = data as { error?: string; message?: string }
+        throw new Error(obj.error || obj.message || res.statusText || "Request failed")
+      }
+
+      const payload = data as GenerateResumeSuccess
+      const relativeUrl = payload.downloadUrl
+      if (!relativeUrl) {
+        throw new Error("No download URL returned from the server")
+      }
+
+      toast({
+        title: "Resume ready",
+        description: payload.message || "Your tailored resume is ready to preview.",
+      })
+
+      navigate("/resume-preview", {
+        state: {
+          downloadUrl: relativeUrl,
+          fileName: payload.fileName,
+          message: payload.message,
+          jobDescription: jobDescription.trim(),
+          resumeFile,
+          resumeFileName: resumeFile.name,
+        },
+      })
+    } catch (e) {
+      toast({
+        title: "Could not tailor resume",
+        description: e instanceof Error ? e.message : "Something went wrong. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGenerating(false)
     }
   }
 
@@ -115,13 +201,17 @@ export function HomeResumeGenerator() {
               </div>
 
               <Button
-                onClick={handleGenerate}
-                disabled={!resumeFile || !jobDescription.trim()}
+                onClick={() => void handleGenerate()}
+                disabled={!resumeFile || !jobDescription.trim() || isGenerating}
                 className="h-12 w-full shrink-0 rounded-2xl border-0 text-base font-medium gradient-primary text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 md:h-14 md:text-lg"
               >
-                <Rocket className="mr-2 h-5 w-5" />
-                Generate tailored resume
-                <ArrowRight className="ml-2 h-5 w-5" />
+                {isGenerating && (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden />
+                )}
+                {isGenerating ? "Tailoring your resume…" : "Generate tailored resume"}
+                {!isGenerating && (
+                  <ArrowRight className="ml-2 h-5 w-5" aria-hidden />
+                )}
               </Button>
             </div>
           </Card>
