@@ -21,18 +21,6 @@ export const model = genAI.getGenerativeModel({
   },
 });
 
-// Only ensure a DB connection on routes that actually need it. The root /
-// and /api/health routes are intentionally registered earlier in app.js so
-// a missing/broken Mongo connection cannot mask itself as a routing error.
-app.use("/api/v1", async (_req, _res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
-
 const isVercel = !!process.env.VERCEL;
 
 if (!isVercel) {
