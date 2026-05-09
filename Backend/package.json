@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "keywords": [],
   "author": "",

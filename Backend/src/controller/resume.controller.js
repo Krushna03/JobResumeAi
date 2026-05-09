@@ -1,31 +1,31 @@
-import fs from 'fs';
-import path from 'path';
 import PDFParser from 'pdf2json';
 const PDFDocument = (await import('pdfkit')).default;
 import { model } from "../index.js"
 import { resumePrompt } from '../utils/prompt.js';
 
 
-export async function extractTextFromPDF(filePath) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error('PDF file does not exist: ' + filePath);
+// Accepts a Buffer (e.g. multer's `req.file.buffer`) so this works on
+// serverless platforms where there's no writable filesystem.
+export async function extractTextFromPDF(buffer) {
+  if (!buffer || !Buffer.isBuffer(buffer)) {
+    throw new Error('PDF buffer is required');
   }
 
   try {
-    const text = await extractWithPdf2Json(filePath);
+    const text = await extractWithPdf2Json(buffer);
     if (text && text.trim().length > 50) {
       return text;
     }
   } catch (error) {}
   try {
-    const text = await extractWithPdfParse(filePath);
+    const text = await extractWithPdfParse(buffer);
     return text;
   } catch (error) {
     throw new Error('Both PDF extraction methods failed. pdf-parse error: ' + error.message);
   }
 }
 
-async function extractWithPdf2Json(filePath) {
+async function extractWithPdf2Json(buffer) {
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser(null, 1);
     
@@ -141,16 +141,15 @@ async function extractWithPdf2Json(filePath) {
       }
     });
     
-    pdfParser.loadPDF(filePath);
+    pdfParser.parseBuffer(buffer);
   });
 }
 
-async function extractWithPdfParse(filePath) {
+async function extractWithPdfParse(buffer) {
   try {
     const pdfParseModule = await import('pdf-parse');
     const pdfParse = pdfParseModule.default || pdfParseModule;
-    const dataBuffer = fs.readFileSync(filePath);
-    const data = await pdfParse(dataBuffer);
+    const data = await pdfParse(buffer);
     const processedText = processExtractedText(data.text);
     return processedText;
   } catch (error) {
@@ -233,7 +232,23 @@ async function generateTailoredResume(resumeText, jobDescription) {
     const prompt = resumePrompt(resumeText, jobDescription);
     const result = await model.generateContent(prompt);
     const response = result.response;
-    return response.text();
+
+    const candidate = response?.candidates?.[0];
+    const finishReason = candidate?.finishReason;
+    if (finishReason && finishReason !== 'STOP') {
+      console.warn(
+        `[generateTailoredResume] Gemini finished early with reason=${finishReason}.`,
+      );
+      if (finishReason === 'MAX_TOKENS') {
+        throw new Error(
+          'The model ran out of output tokens before finishing the resume. ' +
+            'Increase generationConfig.maxOutputTokens.',
+        );
+      }
+    }
+
+    const text = response.text();
+    return text;
   } catch (error) {
     throw new Error('Failed to generate tailored resume: ' + error.message);
   }
@@ -708,16 +723,20 @@ function parseResumeData(resumeText) {
 }
 
 
-async function createATSFriendlyPDF(resumeData, outputPath) {
+// Builds the PDF entirely in memory and resolves with a Buffer.
+// Avoids any filesystem writes so this works on serverless runtimes.
+async function createATSFriendlyPDF(resumeData) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
         size: 'A4',
         margins: { top: 40, bottom: 40, left: 40, right: 40 }
       });
-      
-      const stream = fs.createWriteStream(outputPath);
-      doc.pipe(stream);
+
+      const chunks = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', (error) => reject(error));
 
       const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
       const leftColumnWidth = pageWidth * 0.35;
@@ -970,15 +989,6 @@ async function createATSFriendlyPDF(resumeData, outputPath) {
       }
 
       doc.end();
-      
-      stream.on('finish', () => {
-        resolve(outputPath);
-      });
-      
-      stream.on('error', (error) => {
-        reject(error);
-      });
-      
     } catch (error) {
       reject(error);
     }
@@ -1011,35 +1021,30 @@ export const createNewResume = async (req, res) => {
     }
 
     const resumeFile = req.file;
-    if (!resumeFile) {
+    if (!resumeFile || !resumeFile.buffer) {
       return res.status(400).json({
         error: 'Please upload a resume PDF file'
       });
     }
 
-    const resumeText = await extractTextFromPDF(resumeFile?.path);
-    
+    const resumeText = await extractTextFromPDF(resumeFile.buffer);
     const tailoredResumeText = await generateTailoredResume(resumeText, jobDescription);
     const resumeData = parseResumeData(tailoredResumeText);
 
+    const pdfBuffer = await createATSFriendlyPDF(resumeData);
     const outputFileName = `tailored-resume-${Date.now()}.pdf`;
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-    const outputPath = path.join(uploadsDir, outputFileName);
 
-    await createATSFriendlyPDF(resumeData, outputPath);
-    fs.unlinkSync(resumeFile?.path);
-
-    return res.json({
-      success: true,
-      message: 'ATS-friendly resume tailored successfully',
-      downloadUrl: `/uploads/${outputFileName}`,
-      fileName: outputFileName
-    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${outputFileName}"`
+    );
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('X-Resume-Filename', outputFileName);
+    return res.status(200).end(pdfBuffer);
 
   } catch (error) {
+    if (res.headersSent) return;
     res.status(500).json({
       error: 'Failed to process resume: ' + error.message
     });

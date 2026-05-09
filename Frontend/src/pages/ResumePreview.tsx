@@ -2,12 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { ArrowLeft, Download, FileText, Loader2, RefreshCw } from "lucide-react"
+import { ArrowLeft, Download, FileText, Loader2 } from "lucide-react"
 import { HomeHeader, HomeFooter } from "@/components/home"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
-import { getApiBase, getStoredToken } from "@/lib/api"
 
 import { SpecialZoomLevel, Viewer, Worker } from "@react-pdf-viewer/core"
 import "@react-pdf-viewer/core/lib/styles/index.css"
@@ -16,9 +14,8 @@ const PDF_WORKER_URL =
   "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js"
 
 type ResumePreviewState = {
-  downloadUrl?: string
+  generatedBlob?: Blob
   fileName?: string
-  message?: string
   jobDescription?: string
   resumeFile?: File
   resumeFileName?: string
@@ -27,112 +24,42 @@ type ResumePreviewState = {
 export default function ResumePreview() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { toast } = useToast()
 
   const state = (location.state ?? {}) as ResumePreviewState
   const {
-    downloadUrl,
+    generatedBlob,
     fileName,
-    message,
     jobDescription,
     resumeFile,
     resumeFileName,
   } = state
 
-  const absoluteUrl = useMemo(() => {
-    if (!downloadUrl) return null
-    return `${getApiBase()}${downloadUrl.startsWith("/") ? downloadUrl : `/${downloadUrl}`}`
-  }, [downloadUrl])
-
-  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null)
   const [generatedFileUrl, setGeneratedFileUrl] = useState<string | null>(null)
   const [originalFileUrl, setOriginalFileUrl] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState<boolean>(Boolean(absoluteUrl))
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!absoluteUrl) {
-      setIsLoading(false)
-      return
-    }
-
-    const controller = new AbortController()
-    setIsLoading(true)
-    setError(null)
-
-    const load = async () => {
-      try {
-        const headers = new Headers()
-        const token = getStoredToken()
-        if (token) headers.set("Authorization", `Bearer ${token}`)
-
-        const res = await fetch(absoluteUrl, {
-          headers,
-          credentials: "include",
-          signal: controller.signal,
-        })
-
-        if (!res.ok) {
-          throw new Error("Could not load your tailored resume.")
-        }
-
-        const blob = await res.blob()
-
-        if (blob.type !== "application/pdf") {
-          throw new Error("Invalid file type received from server.")
-        }
-
-        setPdfBlob(blob)
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return
-
-        const msg = e instanceof Error ? e.message : "Something went wrong."
-        setError(msg)
-
-        toast({
-          title: "Could not display resume",
-          description: msg,
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    load()
-
-    return () => controller.abort()
-  }, [absoluteUrl, toast])
-
-  useEffect(() => {
-    if (!pdfBlob) return
-
-    const url = URL.createObjectURL(pdfBlob)
+    if (!generatedBlob) return
+    const url = URL.createObjectURL(generatedBlob)
     setGeneratedFileUrl(url)
-
     return () => URL.revokeObjectURL(url)
-  }, [pdfBlob])
+  }, [generatedBlob])
 
   useEffect(() => {
     if (!resumeFile) return
-
     const url = URL.createObjectURL(resumeFile)
     setOriginalFileUrl(url)
-
     return () => URL.revokeObjectURL(url)
   }, [resumeFile])
 
   const handleDownload = () => {
-    if (!pdfBlob) return
-    const url = URL.createObjectURL(pdfBlob)
-
+    if (!generatedBlob) return
+    const url = URL.createObjectURL(generatedBlob)
     const link = document.createElement("a")
     link.href = url
     link.download = fileName || "tailored-resume.pdf"
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-
     URL.revokeObjectURL(url)
   }
 
@@ -158,11 +85,11 @@ export default function ResumePreview() {
               </Button>
               <h1 className="text-2xl font-bold">Your tailored resume</h1>
               <p className="text-muted-foreground">
-                {message || "Compare your inputs with the tailored output."}
+                Compare your inputs with the tailored output.
               </p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleDownload} disabled={!pdfBlob}>
+              <Button onClick={handleDownload} disabled={!generatedBlob}>
                 <Download className="mr-2 h-4 w-4" /> Download
               </Button>
             </div>
@@ -230,15 +157,13 @@ export default function ResumePreview() {
 
             {/* Right column — generated PDF */}
             <Card className="h-[90vh] overflow-hidden lg:col-span-3">
-              {!absoluteUrl ? (
+              {!generatedBlob ? (
                 <EmptyState />
-              ) : isLoading ? (
+              ) : !generatedFileUrl ? (
                 <div className="flex h-full items-center justify-center">
                   <Loader2 className="animate-spin" />
                 </div>
-              ) : error ? (
-                <ErrorState message={error} onRetry={() => navigate(0)} />
-              ) : generatedFileUrl ? (
+              ) : (
                 <div className="pdf-viewer-no-scrollbar h-full w-full">
                   <Worker workerUrl={PDF_WORKER_URL}>
                     <Viewer
@@ -248,24 +173,13 @@ export default function ResumePreview() {
                     />
                   </Worker>
                 </div>
-              ) : null}
+              )}
             </Card>
           </div>
         </div>
       </main>
 
       <HomeFooter />
-    </div>
-  )
-}
-
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3">
-      <p className="text-red-500">{message}</p>
-      <Button onClick={onRetry}>
-        <RefreshCw className="mr-2 h-4 w-4" /> Retry
-      </Button>
     </div>
   )
 }

@@ -9,26 +9,33 @@ const genAI = new GoogleGenerativeAI(geminiapiKey);
 export const model = genAI.getGenerativeModel({
   model: "gemini-flash-latest",
   generationConfig: {
-    maxOutputTokens: 1000,
+    maxOutputTokens: 8192,
     temperature: 0.3,
+  },
+});
+
+app.use(async (_req, _res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    next(err);
   }
 });
 
-app.get('/', (_, res) => {
-  res.send('Hello');
-});
+const isVercel = !!process.env.VERCEL;
 
-let isConnected = false
-
-connectDB()
-  .then(() => {
-    isConnected = true
-    app.listen(process.env.PORT, () => {
-      console.log(`Server is running at Port : ${process.env.PORT}`);
+if (!isVercel) {
+  const port = process.env.PORT || 5000;
+  connectDB()
+    .then(() => {
+      app.listen(port, () => {
+        console.log(`Server is running at Port : ${port}`);
+      });
+    })
+    .catch((error) => {
+      console.log("MongoDB connection failed !!!", error);
     });
-  })
-  .catch((error) => {
-    console.log('MongoDBconnection failed !!!', error)
-  })
+}
 
 export default app;

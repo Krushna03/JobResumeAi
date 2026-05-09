@@ -16,13 +16,13 @@ app.use(
     origin: corsOrigins.length ? corsOrigins : true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    // Custom headers we set on PDF responses so the frontend can read them.
+    exposedHeaders: ["X-Resume-Filename", "Content-Disposition"],
   })
 );
 
 app.use(express.json({ limit: '20kb' }))
-app.use(express.urlencoded({ extended: true, limit: '20kb'}))
-app.use(express.static('public'))
-app.use('/uploads', express.static('uploads'))
+app.use(express.urlencoded({ extended: true, limit: '20kb' }))
 app.use(cookieParser())
 
 
@@ -32,7 +32,12 @@ import UserRoute from "./routes/user.route.js";
 app.use("/api/v1/resume", ResumeRoute);
 app.use("/api/v1/users", UserRoute);
 
+app.get('/', (_, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.get('/api/health', (_, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 export { app };
-
-
-// http://localhost:5000/api/v1/users/register

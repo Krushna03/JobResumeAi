@@ -8,11 +8,15 @@ import { Upload, FileText, ArrowRight, Rocket, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getApiBase, getStoredToken } from "@/lib/api"
 
-type GenerateResumeSuccess = {
-  success: boolean
+type GenerateResumeError = {
+  error?: string
   message?: string
-  downloadUrl?: string
-  fileName?: string
+}
+
+function parseFilenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null
+  const match = /filename\*?=(?:UTF-\d+'')?"?([^";]+)"?/i.exec(header)
+  return match ? decodeURIComponent(match[1].trim()) : null
 }
 
 export function HomeResumeGenerator() {
@@ -80,38 +84,39 @@ export function HomeResumeGenerator() {
         credentials: "include",
       })
 
-      const text = await res.text();
-
-      let data: unknown = {}
-      if (text) {
-        try {
-          data = JSON.parse(text)
-        } catch {
-          data = { message: text }
-        }
-      }
+      const contentType = res.headers.get("content-type") || ""
 
       if (!res.ok) {
-        const obj = data as { error?: string; message?: string }
-        throw new Error(obj.error || obj.message || res.statusText || "Request failed")
+        let message = res.statusText || "Request failed"
+        if (contentType.includes("application/json")) {
+          const data = (await res.json().catch(() => ({}))) as GenerateResumeError
+          message = data.error || data.message || message
+        } else {
+          const text = await res.text().catch(() => "")
+          if (text) message = text
+        }
+        throw new Error(message)
       }
 
-      const payload = data as GenerateResumeSuccess
-      const relativeUrl = payload.downloadUrl
-      if (!relativeUrl) {
-        throw new Error("No download URL returned from the server")
+      if (!contentType.includes("application/pdf")) {
+        throw new Error("Unexpected response from the server. Expected a PDF.")
       }
+
+      const generatedBlob = await res.blob()
+      const generatedFileName =
+        res.headers.get("X-Resume-Filename") ||
+        parseFilenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
+        `tailored-resume-${Date.now()}.pdf`
 
       toast({
         title: "Resume ready",
-        description: payload.message || "Your tailored resume is ready to preview.",
+        description: "Your tailored resume is ready to preview.",
       })
 
       navigate("/resume-preview", {
         state: {
-          downloadUrl: relativeUrl,
-          fileName: payload.fileName,
-          message: payload.message,
+          generatedBlob,
+          fileName: generatedFileName,
           jobDescription: jobDescription.trim(),
           resumeFile,
           resumeFileName: resumeFile.name,
