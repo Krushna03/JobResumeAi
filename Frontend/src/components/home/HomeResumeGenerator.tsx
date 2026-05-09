@@ -107,19 +107,22 @@ export function HomeResumeGenerator() {
         res.headers.get("X-Resume-Filename") ||
         parseFilenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
         `tailored-resume-${Date.now()}.pdf`
+      const resumeId = res.headers.get("X-Resume-Id")
 
       toast({
         title: "Resume ready",
         description: "Your tailored resume is ready to preview.",
       })
 
-      navigate("/resume-preview", {
+      const previewPath = resumeId ? `/resume-preview/${resumeId}` : "/resume-preview"
+      navigate(previewPath, {
         state: {
           generatedBlob,
           fileName: generatedFileName,
           jobDescription: jobDescription.trim(),
           resumeFile,
           resumeFileName: resumeFile.name,
+          resumeId: resumeId ?? undefined,
         },
       })
     } catch (e) {

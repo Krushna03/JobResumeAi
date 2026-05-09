@@ -16,8 +16,7 @@ app.use(
     origin: corsOrigins.length ? corsOrigins : true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-    // Custom headers we set on PDF responses so the frontend can read them.
-    exposedHeaders: ["X-Resume-Filename", "Content-Disposition"],
+    exposedHeaders: ["X-Resume-Filename", "X-Resume-Id", "Content-Disposition"],
   })
 );
 

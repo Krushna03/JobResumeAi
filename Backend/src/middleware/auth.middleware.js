@@ -1,6 +1,29 @@
 import jwt from "jsonwebtoken";
 import UserModel from "../model/User.models.js";
 
+// Like verifyJWT but never blocks the request. If a valid token is present,
+// req.user is populated; otherwise the request continues anonymously.
+// Useful for endpoints that have both anonymous and authenticated behavior
+// (e.g. resume generation: anonymous works, but auth allows persistence).
+export const optionalJWT = async (req, _res, next) => {
+  try {
+    const token =
+      req.cookies?.accessToken ||
+      req.header("Authorization")?.replace("Bearer ", "")?.trim();
+
+    if (!token) return next();
+
+    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const account = await UserModel.findById(decodedToken?._id).select(
+      "-password -refreshToken"
+    );
+    if (account) req.user = account;
+  } catch {
+    // Silently ignore invalid/expired tokens for optional auth.
+  }
+  next();
+};
+
 export const verifyJWT = async (req, res, next) => {
   try {
     const token =

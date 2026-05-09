@@ -2,6 +2,31 @@ import PDFParser from 'pdf2json';
 const PDFDocument = (await import('pdfkit')).default;
 import { model } from "../index.js"
 import { resumePrompt } from '../utils/prompt.js';
+import { Resume } from '../model/Resume.model.js';
+
+// Mongoose returns binary fields from `.lean()` queries as a BSON Binary
+// instance, not a Node Buffer. Express's `res.end(...)` only accepts
+// string | Buffer | Uint8Array, so coerce here before sending.
+function toBuffer(value) {
+  if (!value) return null;
+  if (Buffer.isBuffer(value)) return value;
+  // BSON Binary objects expose the raw bytes via .buffer
+  if (value.buffer && Buffer.isBuffer(value.buffer)) return value.buffer;
+  if (value.buffer) return Buffer.from(value.buffer);
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  return null;
+}
+
+// Best-effort: take the first non-empty line of the JD as the job title.
+function deriveJobTitle(jobDescription) {
+  if (!jobDescription) return '';
+  const firstLine = jobDescription
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .find((l) => l.length > 0);
+  if (!firstLine) return '';
+  return firstLine.length > 80 ? firstLine.slice(0, 77) + '…' : firstLine;
+}
 
 
 // Accepts a Buffer (e.g. multer's `req.file.buffer`) so this works on
@@ -1034,15 +1059,47 @@ export const createNewResume = async (req, res) => {
     const pdfBuffer = await createATSFriendlyPDF(resumeData);
     const outputFileName = `tailored-resume-${Date.now()}.pdf`;
 
+    // Persist the resume only when the request is authenticated. Anonymous
+    // generations still succeed but won't show up in the dashboard or be
+    // reachable later by ID.
+    let resumeId = null;
+    if (req.user?._id) {
+      try {
+        const saved = await Resume.create({
+          user: req.user._id,
+          jobDescription,
+          jobTitle: deriveJobTitle(jobDescription),
+          originalText: resumeText,
+          originalPdf: {
+            data: resumeFile.buffer,
+            contentType: resumeFile.mimetype || 'application/pdf',
+            fileName: resumeFile.originalname || 'resume.pdf',
+            size: resumeFile.size || resumeFile.buffer.length,
+          },
+          tailoredText: tailoredResumeText,
+          parsedData: resumeData,
+          generatedPdf: {
+            data: pdfBuffer,
+            contentType: 'application/pdf',
+            fileName: outputFileName,
+            size: pdfBuffer.length,
+          },
+        });
+        resumeId = saved._id.toString();
+      } catch (persistError) {
+        console.error('[createNewResume] failed to persist resume:', persistError);
+      }
+    }
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `inline; filename="${outputFileName}"`
+      `inline; filename="${outputFileName}"`,
     );
     res.setHeader('Content-Length', pdfBuffer.length);
     res.setHeader('X-Resume-Filename', outputFileName);
+    if (resumeId) res.setHeader('X-Resume-Id', resumeId);
     return res.status(200).end(pdfBuffer);
-
   } catch (error) {
     if (res.headersSent) return;
     res.status(500).json({
@@ -1050,3 +1107,142 @@ export const createNewResume = async (req, res) => {
     });
   }
 }
+
+// List resumes belonging to the current user, newest first. Excludes the
+// heavy binary fields from the response.
+export const listMyResumes = async (req, res) => {
+  try {
+    const resumes = await Resume.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .select(
+        'jobTitle jobDescription createdAt updatedAt generatedPdf.fileName generatedPdf.size originalPdf.fileName originalPdf.size',
+      )
+      .lean();
+
+    const items = resumes.map((r) => ({
+      id: r._id.toString(),
+      jobTitle: r.jobTitle || 'Tailored resume',
+      jobDescriptionPreview: (r.jobDescription || '').slice(0, 220),
+      generatedFileName: r.generatedPdf?.fileName || '',
+      generatedFileSize: r.generatedPdf?.size || 0,
+      originalFileName: r.originalPdf?.fileName || '',
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+
+    return res.json({ success: true, count: items.length, items });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: 'Failed to list resumes: ' + error.message });
+  }
+};
+
+// Get a single resume's metadata (no binaries) belonging to the current user.
+export const getResumeById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const resume = await Resume.findOne({ _id: id, user: req.user._id })
+      .select('-originalPdf.data -generatedPdf.data')
+      .lean();
+
+    if (!resume) return res.status(404).json({ error: 'Resume not found' });
+
+    return res.json({
+      success: true,
+      data: {
+        id: resume._id.toString(),
+        jobTitle: resume.jobTitle || 'Tailored resume',
+        jobDescription: resume.jobDescription,
+        originalFileName: resume.originalPdf?.fileName || '',
+        generatedFileName: resume.generatedPdf?.fileName || '',
+        hasOriginalPdf: !!resume.originalPdf?.size,
+        hasGeneratedPdf: !!resume.generatedPdf?.size,
+        createdAt: resume.createdAt,
+        updatedAt: resume.updatedAt,
+      },
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: 'Failed to fetch resume: ' + error.message });
+  }
+};
+
+// Stream the generated tailored PDF for a resume.
+export const getGeneratedResumePdf = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const resume = await Resume.findOne({ _id: id, user: req.user._id })
+      .select('+generatedPdf.data generatedPdf.fileName generatedPdf.contentType')
+      .lean();
+
+    const pdfBuffer = toBuffer(resume?.generatedPdf?.data);
+    if (!resume || !pdfBuffer) {
+      return res.status(404).json({ error: 'Generated PDF not found' });
+    }
+
+    const fileName =
+      resume.generatedPdf.fileName || `tailored-resume-${id}.pdf`;
+    res.setHeader(
+      'Content-Type',
+      resume.generatedPdf.contentType || 'application/pdf',
+    );
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('X-Resume-Filename', fileName);
+    return res.status(200).end(pdfBuffer);
+  } catch (error) {
+    if (res.headersSent) return;
+    return res
+      .status(500)
+      .json({ error: 'Failed to fetch PDF: ' + error.message });
+  }
+};
+
+// Stream the originally uploaded PDF for a resume.
+export const getOriginalResumePdf = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const resume = await Resume.findOne({ _id: id, user: req.user._id })
+      .select('+originalPdf.data originalPdf.fileName originalPdf.contentType')
+      .lean();
+
+    const pdfBuffer = toBuffer(resume?.originalPdf?.data);
+    if (!resume || !pdfBuffer) {
+      return res.status(404).json({ error: 'Original PDF not found' });
+    }
+
+    const fileName =
+      resume.originalPdf.fileName || `original-resume-${id}.pdf`;
+    res.setHeader(
+      'Content-Type',
+      resume.originalPdf.contentType || 'application/pdf',
+    );
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('X-Resume-Filename', fileName);
+    return res.status(200).end(pdfBuffer);
+  } catch (error) {
+    if (res.headersSent) return;
+    return res
+      .status(500)
+      .json({ error: 'Failed to fetch PDF: ' + error.message });
+  }
+};
+
+export const deleteResume = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await Resume.findOneAndDelete({
+      _id: id,
+      user: req.user._id,
+    });
+    if (!result) return res.status(404).json({ error: 'Resume not found' });
+    return res.json({ success: true });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: 'Failed to delete resume: ' + error.message });
+  }
+};

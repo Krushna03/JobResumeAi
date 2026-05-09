@@ -29,6 +29,7 @@ function AppRoutes() {
           <Route path="/" element={<Home />} />
           <Route path="/tailor" element={<Tailor />} />
           <Route path="/resume-preview" element={<ResumePreview />} />
+          <Route path="/resume-preview/:id" element={<ResumePreview />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/builder" element={<Builder />} />
