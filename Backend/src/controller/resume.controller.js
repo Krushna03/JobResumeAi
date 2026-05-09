@@ -1,5 +1,5 @@
 import PDFParser from 'pdf2json';
-const PDFDocument = (await import('pdfkit')).default;
+import PDFDocument from 'pdfkit';
 import { model } from "../index.js"
 import { resumePrompt } from '../utils/prompt.js';
 import { Resume } from '../model/Resume.model.js';

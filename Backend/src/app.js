@@ -31,12 +31,28 @@ import UserRoute from "./routes/user.route.js";
 app.use("/api/v1/resume", ResumeRoute);
 app.use("/api/v1/users", UserRoute);
 
-app.get('/', (_, res) => {
-  res.json({ status: 'ok' });
+// 404 for unknown API routes.
+app.use((req, res, _next) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
+  });
 });
 
-app.get('/api/health', (_, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Express error handler. Without this, a thrown error inside a handler
+// can take down the serverless invocation as FUNCTION_INVOCATION_FAILED.
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, _next) => {
+  console.error("[express error]", err);
+  if (res.headersSent) {
+    // Response already started streaming; just end it.
+    try { res.end(); } catch { /* noop */ }
+    return;
+  }
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal server error",
+  });
 });
 
 export { app };

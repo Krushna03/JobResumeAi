@@ -11,6 +11,8 @@ if (!globalForMongoose.__mongoose) {
 
 const cached = globalForMongoose.__mongoose;
 
+const DB_NAME = process.env.MONGODB_DB_NAME || "coldmailer";
+
 const connectDB = async () => {
   if (cached.conn) {
     return cached.conn;
@@ -21,13 +23,20 @@ const connectDB = async () => {
       throw new Error("MONGODB_URI is not set");
     }
 
+    // Pass `dbName` as an option instead of concatenating onto the URI.
+    // Atlas URIs typically include a query string (?retryWrites=...), and
+    // concatenating "/dbname" after that produces an invalid URI on some
+    // mongoose versions / runtimes.
     cached.promise = mongoose
-      .connect(`${process.env.MONGODB_URI}/coldmailer`, {
+      .connect(process.env.MONGODB_URI, {
+        dbName: DB_NAME,
         bufferCommands: false,
         serverSelectionTimeoutMS: 10000,
       })
       .then((m) => {
-        console.log(`MongoDB connected: ${m.connection.host}`);
+        console.log(
+          `MongoDB connected: ${m.connection.host} (db=${m.connection.name})`
+        );
         return m;
       })
       .catch((err) => {
