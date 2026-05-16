@@ -220,9 +220,9 @@ export default function ResumePreview() {
           {/* Two-column layout: inputs left, generated PDF right */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
             {/* Left column — inputs */}
-            <div className="flex flex-col gap-4 lg:col-span-2">
+            <div className="flex flex-col gap-4 lg:col-span-2 lg:h-[90vh]">
               {/* Job Description */}
-              <Card className="flex h-[39vh] min-h-[280px] flex-col overflow-hidden">
+              <Card className="flex min-h-[280px] flex-1 flex-col overflow-hidden lg:min-h-0">
                 <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
                   <h2 className="text-sm font-semibold">Job description</h2>
                   {jobDescription ? (
@@ -247,7 +247,7 @@ export default function ResumePreview() {
               </Card>
 
               {/* Original Resume */}
-              <Card className="flex h-[39vh] min-h-[280px] flex-col overflow-hidden">
+              <Card className="flex min-h-[280px] flex-1 flex-col overflow-hidden lg:min-h-0">
                 <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
                   <h2 className="text-sm font-semibold">Original resume</h2>
                   {originalFileName ? (

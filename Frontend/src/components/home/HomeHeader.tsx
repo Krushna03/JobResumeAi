@@ -1,15 +1,10 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/AuthContext"
 import { AppLogo } from "@/components/AppLogo"
-import { ChevronDown, Menu, User, X } from "lucide-react"
+import { ThemeToggle } from "@/components/ThemeToggle"
+import { Menu, User, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 const navLinkClass =
   "text-base text-muted-foreground font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
@@ -22,9 +17,7 @@ const SCROLL_THRESHOLD_PX = 16
 export function HomeHeader() {
   const { user, logout, isLoading } = useAuth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const [isScrolled, setIsScrolled] = useState(
-    () => typeof window !== "undefined" && window.scrollY > SCROLL_THRESHOLD_PX
-  )
+  const [isScrolled, setIsScrolled] = useState(() => typeof window !== "undefined" && window.scrollY > SCROLL_THRESHOLD_PX)
 
   useEffect(() => {
     const onScroll = () => {
@@ -46,7 +39,7 @@ export function HomeHeader() {
           : "!border-b-0 border-transparent !bg-transparent shadow-none backdrop-blur-0"
       )}
     >
-      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 md:h-[4.25rem] lg:px-8">
+      <div className="relative mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 md:h-[4.25rem] lg:px-8">
         <AppLogo
           size="md"
           className={cn(
@@ -55,38 +48,38 @@ export function HomeHeader() {
           )}
         />
 
-        <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">
-          <Link to="/#features" className={navLinkClass}>
+        <nav
+          className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 md:flex"
+          aria-label="Primary"
+        >
+          <Link to="/#features" className={cn(navLinkClass, "pointer-events-auto")}>
             Features
           </Link>
-          <Link to="/#how-it-works" className={navLinkClass}>
+          <Link to="/#how-it-works" className={cn(navLinkClass, "pointer-events-auto")}>
             How it works
           </Link>
-          <Link to="/#pricing" className={navLinkClass}>
+          <Link to="/#pricing" className={cn(navLinkClass, "pointer-events-auto")}>
             Pricing
           </Link>
-          <Link to="/#faq" className={navLinkClass}>
+          <Link to="/#faq" className={cn(navLinkClass, "pointer-events-auto")}>
             FAQ
           </Link>
+        </nav>
+
+        <div className="hidden items-center gap-3 md:flex">
           {!isLoading && user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="max-w-[10rem] rounded-full gap-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                >
-                  <User className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-                  <ChevronDown className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem asChild>
-                  <Link to="/dashboard">Dashboard</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => logout()}>Log out</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Link to="/dashboard">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Go to dashboard"
+                title="Dashboard"
+                className="rounded-full text-muted-foreground p-1.5 hover:bg-white/10 hover:text-foreground"
+                asChild
+              >
+                  <User className="h-8 w-8 shrink-0 opacity-90" aria-hidden />
+              </Button>
+            </Link>
           ) : !isLoading ? (
             <>
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-white/10 hover:text-foreground" asChild>
@@ -97,12 +90,14 @@ export function HomeHeader() {
               </Button>
             </>
           ) : null}
+          <ThemeToggle />
           <Button size="sm" className="rounded-full border-0 px-5 gradient-primary text-white hover:opacity-90" asChild>
-            <Link to="/tailor">Try the tool</Link>
+            <Link to="/tailor">Align Resume to JD</Link>
           </Button>
-        </nav>
+        </div>
 
         <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
           <Button
             variant="ghost"
             size="icon"

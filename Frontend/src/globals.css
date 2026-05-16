@@ -13,12 +13,12 @@
   /* Brand (reference hex) */
   --brand-primary: #5e5ce6;
   --brand-secondary: #0a84ff;
-  --brand-tertiary: #bf5af2;
+  --brand-tertiary: #4f8cff;
   --brand-app: #0c101b;
   /* RGB tuples for Tailwind opacity modifiers, e.g. bg-[rgb(var(--brand-primary-rgb)/0.1)] */
   --brand-primary-rgb: 94 92 230;
   --brand-secondary-rgb: 10 132 255;
-  --brand-tertiary-rgb: 191 90 242;
+  --brand-tertiary-rgb: 79 140 255;
 
   /* Neutral scale — cool slate, anchored at app background */
   --neutral-50: #f8fafc;
@@ -76,11 +76,11 @@
   --sidebar-ring: 241 73% 63%;
 
   /* Gradients & surfaces */
-  --gradient-primary: linear-gradient(135deg, #5e5ce6 0%, #bf5af2 100%);
+  --gradient-primary: linear-gradient(135deg, #5e5ce6 0%, #4f8cff 100%);
   --gradient-secondary: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
-  --gradient-accent: linear-gradient(135deg, #0a84ff 0%, #bf5af2 100%);
-  --gradient-text: linear-gradient(90deg, #5e5ce6 0%, #0a84ff 45%, #bf5af2 100%);
-  --gradient-cta: linear-gradient(135deg, rgb(94 92 230 / 0.95) 0%, rgb(191 90 242 / 0.88) 48%, rgb(10 132 255 / 0.92) 100%);
+  --gradient-accent: linear-gradient(135deg, #0a84ff 0%, #38bdf8 100%);
+  --gradient-text: linear-gradient(90deg, #5e5ce6 0%, #0a84ff 50%, #38bdf8 100%);
+  --gradient-cta: linear-gradient(135deg, rgb(94 92 230 / 0.95) 0%, rgb(79 140 255 / 0.88) 48%, rgb(10 132 255 / 0.92) 100%);
   --gradient-mesh-light: radial-gradient(ellipse 80% 50% at 50% -20%, rgb(94 92 230 / 0.12), transparent 55%);
 }
 
@@ -103,7 +103,7 @@
   --muted: 217 33% 17%;
   --muted-foreground: 215 20% 65%;
 
-  --accent: 289 85% 65%;
+  --accent: 217 100% 65%;
   --accent-foreground: 0 0% 100%;
 
   --destructive: 0 63% 31%;

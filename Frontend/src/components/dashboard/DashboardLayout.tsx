@@ -3,7 +3,6 @@ import { Link, NavLink } from "react-router-dom";
 import { LayoutDashboard, ChevronDown } from "lucide-react";
 import { AppLogo } from "@/components/AppLogo";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,7 +45,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-end gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-sm md:px-6">
-          <ThemeToggle />
           {!isLoading && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
