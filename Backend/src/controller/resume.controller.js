@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { generateText } from '../config/llmProvider.js';
+import { model } from '../config/gemini.js';
 import { resumePrompt } from '../utils/prompt.js';
 import { extractTextFromPDF } from '../utils/pdfExtractor.js';
 import { parseResumeData } from '../utils/resumeParser.js';
@@ -35,8 +35,24 @@ function deriveJobTitle(jobDescription) {
 async function generateTailoredResume(resumeText, jobDescription) {
   try {
     const prompt = resumePrompt(resumeText, jobDescription);
-    const { text } = await generateText(prompt);
-    return text;
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+
+    const candidate = response?.candidates?.[0];
+    const finishReason = candidate?.finishReason;
+    if (finishReason && finishReason !== 'STOP') {
+      console.warn(
+        `[generateTailoredResume] Gemini finished early with reason=${finishReason}.`,
+      );
+      if (finishReason === 'MAX_TOKENS') {
+        throw new Error(
+          'The model ran out of output tokens before finishing the resume. ' +
+            'Increase generationConfig.maxOutputTokens.',
+        );
+      }
+    }
+
+    return response.text();
   } catch (error) {
     throw new Error('Failed to generate tailored resume: ' + error.message);
   }
