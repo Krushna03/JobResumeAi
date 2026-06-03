@@ -31,6 +31,40 @@ function deriveJobTitle(jobDescription) {
   return firstLine.length > 80 ? firstLine.slice(0, 77) + '…' : firstLine;
 }
 
+// Convert any string to a safe ASCII slug (a-z, 0-9, dashes only).
+// Keeps Content-Disposition headers and dashboard listings clean.
+function slugForFile(input) {
+  return String(input || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '') // strip diacritics
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+    .toLowerCase();
+}
+
+// Build a download-friendly filename in the form
+//   <tech-stack>-<name>-resume.pdf
+// using the parsed resume's `title` as the tech stack (falls back to the
+// candidate's strongest technology / skill, then to a generic name).
+function buildResumeFileName(resumeData) {
+  const nameSlug = slugForFile(resumeData?.name);
+  let stackSlug = slugForFile(resumeData?.title);
+  if (!stackSlug) {
+    const fallback =
+      (Array.isArray(resumeData?.technologies) && resumeData.technologies[0]) ||
+      (Array.isArray(resumeData?.skills) && resumeData.skills[0]) ||
+      '';
+    stackSlug = slugForFile(fallback);
+  }
+  const parts = [stackSlug, nameSlug, 'resume'].filter(Boolean);
+  if (parts.length <= 1) {
+    // Nothing useful to use — keep something unique to avoid collisions.
+    return `tailored-resume-${Date.now()}.pdf`;
+  }
+  return `${parts.join('-')}.pdf`;
+}
+
 
 async function generateTailoredResume(resumeText, jobDescription) {
   try {
@@ -81,9 +115,18 @@ async function createATSFriendlyPDF(resumeData) {
       let leftY = doc.page.margins.top;
       let rightY = doc.page.margins.top;
 
-      const primaryColor = '#2563eb';
-      const textColor = '#1f2937';
-      const lightGray = '#6b7280';
+      const primaryColor = '#000000';
+      const textColor = '#000000';
+      const lightGray = '#2e3540';
+
+      const pageBottom = () => doc.page.height - doc.page.margins.bottom;
+      const ensureSpace = (neededHeight, y) => {
+        if (y + neededHeight > pageBottom()) {
+          doc.addPage();
+          return doc.page.margins.top;
+        }
+        return y;
+      };
       if (resumeData.name) {
         doc.fontSize(20).font('Helvetica-Bold').fillColor(textColor)
            .text(resumeData.name, doc.page.margins.left, leftY, {
@@ -169,15 +212,19 @@ async function createATSFriendlyPDF(resumeData) {
       if (resumeData.certifications.length > 0) {
         leftY = addSectionHeader(doc, 'CERTIFICATIONS', leftColumnX, leftY, primaryColor);
         resumeData.certifications.forEach(cert => {
-          doc.fontSize(10).font('Helvetica').fillColor(textColor)
-             .text(`• ${cert}`, leftColumnX, leftY, { 
+          const certText = `• ${cert}`;
+          doc.fontSize(10).font('Helvetica');
+          const blockH = doc.heightOfString(certText, { width: leftColumnWidth, lineGap: 2 });
+          leftY = ensureSpace(blockH + 8, leftY);
+          doc.fillColor(textColor)
+             .text(certText, leftColumnX, leftY, {
                width: leftColumnWidth,
                align: 'left',
                lineGap: 2,
                ellipsis: false,
                break: true
              });
-          leftY += doc.heightOfString(`• ${cert}`, { width: leftColumnWidth, lineGap: 2 }) + 8;
+          leftY += blockH + 8;
         });
         leftY += 15;
       }
@@ -186,60 +233,68 @@ async function createATSFriendlyPDF(resumeData) {
       if (resumeData.experience.length > 0) {
         rightY = addSectionHeader(doc, 'EXPERIENCE', rightColumnX, rightY, primaryColor);
         
-        resumeData.experience.forEach((exp, index) => {
-          doc.fontSize(12).font('Helvetica-Bold').fillColor(textColor)
-             .text(exp.title, rightColumnX, rightY, { 
+        resumeData.experience.forEach((exp) => {
+          // Reserve room for the title plus at least one body line so a
+          // job title doesn't get stranded alone at the bottom of a page.
+          doc.fontSize(12).font('Helvetica-Bold');
+          const titleH = doc.heightOfString(exp.title, { width: rightColumnWidth });
+          rightY = ensureSpace(titleH + 30, rightY);
+          doc.fillColor(textColor)
+             .text(exp.title, rightColumnX, rightY, {
                width: rightColumnWidth,
                align: 'left',
                ellipsis: false,
                break: true
              });
-          rightY += doc.heightOfString(exp.title, { width: rightColumnWidth }) + 5;
+         rightY += titleH + 5;
 
           let companyDuration = '';
           if (exp.company && exp.duration) {
             companyDuration = `${exp.company} | ${exp.duration}`;
           } else if (exp.company) {
             companyDuration = exp.company;
-          } else if (exp.duration) {
+         } else if (exp.duration) {
             companyDuration = exp.duration;
           }
 
           if (companyDuration) {
-            doc.fontSize(10).font('Helvetica').fillColor(primaryColor)
-               .text(companyDuration, rightColumnX, rightY, { 
+            doc.fontSize(10).font('Helvetica');
+            const cdH = doc.heightOfString(companyDuration, { width: rightColumnWidth });
+            rightY = ensureSpace(cdH + 8, rightY);
+            doc.fillColor(primaryColor)
+               .text(companyDuration, rightColumnX, rightY, {
                  width: rightColumnWidth,
                  align: 'left',
                  ellipsis: false,
                  break: true
                });
-            rightY += doc.heightOfString(companyDuration, { width: rightColumnWidth }) + 8;
+            rightY += cdH + 8;
           }
 
           if (exp.description && exp.description.length > 0) {
             exp.description.forEach(desc => {
               const cleanDesc = desc.trim();
-              if (cleanDesc) {
-                doc.fontSize(10).font('Helvetica').fillColor(textColor)
-                   .text(`• ${cleanDesc}`, rightColumnX, rightY, { 
-                     width: rightColumnWidth,
-                     align: 'left',
-                     lineGap: 3,
-                     ellipsis: false,
-                     break: true
-                   });
-                rightY += doc.heightOfString(`• ${cleanDesc}`, { width: rightColumnWidth, lineGap: 3 }) + 5;
-              }
+              if (!cleanDesc) return;
+              const lineText = `• ${cleanDesc}`;
+              doc.fontSize(10).font('Helvetica');
+              const blockH = doc.heightOfString(lineText, {
+                width: rightColumnWidth,
+                lineGap: 3,
+              });
+              rightY = ensureSpace(blockH + 5, rightY);
+              doc.fillColor(textColor)
+                 .text(lineText, rightColumnX, rightY, {
+                   width: rightColumnWidth,
+                   align: 'left',
+                   lineGap: 3,
+                   ellipsis: false,
+                   break: true
+                 });
+              rightY += blockH + 5;
             });
           }
 
           rightY += 15;
-
-          if (rightY > doc.page.height - doc.page.margins.bottom - 50) {
-            doc.addPage();
-            rightY = doc.page.margins.top;
-            leftY = doc.page.margins.top;
-          }
         });
       }
 
@@ -248,14 +303,19 @@ async function createATSFriendlyPDF(resumeData) {
         
         resumeData.education.forEach(edu => {
           if (edu.degree) {
-            doc.fontSize(11).font('Helvetica-Bold').fillColor(textColor)
-               .text(edu.degree, rightColumnX, rightY, { 
+            // Reserve room for the degree plus the institution/year line
+            // below it so they always stay together on the same page.
+            doc.fontSize(11).font('Helvetica-Bold');
+            const degH = doc.heightOfString(edu.degree, { width: rightColumnWidth });
+            rightY = ensureSpace(degH + 30, rightY);
+            doc.fillColor(textColor)
+               .text(edu.degree, rightColumnX, rightY, {
                  width: rightColumnWidth,
                  align: 'left',
                  ellipsis: false,
                  break: true
                });
-            rightY += doc.heightOfString(edu.degree, { width: rightColumnWidth }) + 5;
+            rightY += degH + 5;
           }
 
           let eduDetails = '';
@@ -268,14 +328,17 @@ async function createATSFriendlyPDF(resumeData) {
           }
 
           if (eduDetails) {
-            doc.fontSize(10).font('Helvetica').fillColor(primaryColor)
-               .text(eduDetails, rightColumnX, rightY, { 
+            doc.fontSize(10).font('Helvetica');
+            const detH = doc.heightOfString(eduDetails, { width: rightColumnWidth });
+            rightY = ensureSpace(detH + 12, rightY);
+            doc.fillColor(primaryColor)
+               .text(eduDetails, rightColumnX, rightY, {
                  width: rightColumnWidth,
                  align: 'left',
                  ellipsis: false,
                  break: true
                });
-            rightY += doc.heightOfString(eduDetails, { width: rightColumnWidth }) + 12;
+            rightY += detH + 12;
           }
         });
         rightY += 10;
@@ -286,6 +349,9 @@ async function createATSFriendlyPDF(resumeData) {
 
         resumeData.projects.forEach(project => {
           if (project.name) {
+            // Reserve enough room for the project name (+ links row) plus
+            // at least one bullet line so the header doesn't get stranded.
+            rightY = ensureSpace(50, rightY);
             const headerHeight = drawProjectHeader(doc, project, {
               x: rightColumnX,
               y: rightY,
@@ -299,19 +365,25 @@ async function createATSFriendlyPDF(resumeData) {
           if (project.description && project.description.length > 0) {
             project.description.forEach(desc => {
               const cleanDesc = desc.trim();
-              if (cleanDesc) {
-                doc.fontSize(10).font('Helvetica').fillColor(textColor)
-                   .text(`• ${cleanDesc}`, rightColumnX, rightY, {
-                     width: rightColumnWidth,
-                     align: 'left',
-                     lineGap: 3,
-                     ellipsis: false,
-                     break: true,
-                     link: null,
-                     underline: false,
-                   });
-                rightY += doc.heightOfString(`• ${cleanDesc}`, { width: rightColumnWidth, lineGap: 3 }) + 5;
-              }
+              if (!cleanDesc) return;
+              const lineText = `• ${cleanDesc}`;
+              doc.fontSize(10).font('Helvetica');
+              const blockH = doc.heightOfString(lineText, {
+                width: rightColumnWidth,
+                lineGap: 3,
+              });
+              rightY = ensureSpace(blockH + 5, rightY);
+              doc.fillColor(textColor)
+                 .text(lineText, rightColumnX, rightY, {
+                   width: rightColumnWidth,
+                   align: 'left',
+                   lineGap: 3,
+                   ellipsis: false,
+                   break: true,
+                   link: null,
+                   underline: false,
+                 });
+              rightY += blockH + 5;
             });
           }
           rightY += 15;
@@ -381,8 +453,10 @@ export const createNewResume = async (req, res) => {
     const pdfBuffer = await createATSFriendlyPDF(resumeData);
     stage(`pdf-render (bytes=${pdfBuffer.length})`, t0);
 
-    const outputFileName = `tailored-resume-${Date.now()}.pdf`;
-    console.log(`[createNewResume] total elapsed=${Date.now() - reqStart}ms`);
+    const outputFileName = buildResumeFileName(resumeData);
+    console.log(
+      `[createNewResume] total elapsed=${Date.now() - reqStart}ms file=${outputFileName}`,
+    );
 
     // Persist the resume only when the request is authenticated. Anonymous
     // generations still succeed but won't show up in the dashboard or be
@@ -553,6 +627,81 @@ export const getOriginalResumePdf = async (req, res) => {
     return res
       .status(500)
       .json({ error: 'Failed to fetch PDF: ' + error.message });
+  }
+};
+
+// Persist a resume that was already generated anonymously
+export const importExistingResume = async (req, res) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const { jobDescription } = req.body;
+    if (!jobDescription || !jobDescription.trim()) {
+      return res
+        .status(400)
+        .json({ error: 'Job description not provided in body' });
+    }
+
+    const originalFile = req.files?.original?.[0];
+    const generatedFile = req.files?.generated?.[0];
+    if (!originalFile?.buffer || !generatedFile?.buffer) {
+      return res.status(400).json({
+        error: 'Both `original` and `generated` PDFs are required',
+      });
+    }
+
+    let originalText = '';
+    try {
+      const extracted = await extractTextFromPDF(originalFile.buffer);
+      originalText = extracted?.text || '';
+    } catch (e) {
+      console.warn(
+        '[importExistingResume] failed to extract original text:',
+        e?.message || e,
+      );
+    }
+
+    const generatedFileName =
+      (typeof req.body.generatedFileName === 'string' &&
+        req.body.generatedFileName.trim()) ||
+      `tailored-resume-${Date.now()}.pdf`;
+
+    const saved = await Resume.create({
+      user: req.user._id,
+      jobDescription,
+      jobTitle: deriveJobTitle(jobDescription),
+      originalText,
+      originalPdf: {
+        data: originalFile.buffer,
+        contentType: originalFile.mimetype || 'application/pdf',
+        fileName: originalFile.originalname || 'resume.pdf',
+        size: originalFile.size || originalFile.buffer.length,
+      },
+      tailoredText: '',
+      parsedData: {},
+      generatedPdf: {
+        data: generatedFile.buffer,
+        contentType: generatedFile.mimetype || 'application/pdf',
+        fileName: generatedFileName,
+        size: generatedFile.size || generatedFile.buffer.length,
+      },
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: saved._id.toString(),
+        generatedFileName: saved.generatedPdf.fileName,
+        originalFileName: saved.originalPdf.fileName,
+      },
+    });
+  } catch (error) {
+    if (res.headersSent) return;
+    return res
+      .status(500)
+      .json({ error: 'Failed to import resume: ' + error.message });
   }
 };
 
