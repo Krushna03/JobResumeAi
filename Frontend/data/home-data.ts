@@ -1,6 +1,6 @@
 export const homeStats = [
-  { label: "Resumes tailored", value: "10,000+" },
-  { label: "Applications supported", value: "25,000+" },
+  { label: "Resumes tailored", value: "100+" },
+  { label: "Applications supported", value: "250+" },
   { label: "Avg. time to draft", value: "< 2 min" },
   { label: "User satisfaction", value: "4.9 / 5" },
 ] as const
