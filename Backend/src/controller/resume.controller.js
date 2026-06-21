@@ -1,7 +1,10 @@
-import PDFParser from 'pdf2json';
 import PDFDocument from 'pdfkit';
-import { model } from "../index.js"
+import { model } from '../config/gemini.js';
 import { resumePrompt } from '../utils/prompt.js';
+import { extractTextFromPDF } from '../utils/pdfExtractor.js';
+import { parseResumeData } from '../utils/resumeParser.js';
+import { sanitizeResumeTextForParsing } from '../utils/textCleaner.js';
+import { drawContactLine, drawProjectHeader } from '../utils/pdfLinkRenderer.js';
 import { Resume } from '../model/Resume.model.js';
 
 // Mongoose returns binary fields from `.lean()` queries as a BSON Binary
@@ -29,229 +32,6 @@ function deriveJobTitle(jobDescription) {
 }
 
 
-// Accepts a Buffer (e.g. multer's `req.file.buffer`) so this works on
-// serverless platforms where there's no writable filesystem.
-export async function extractTextFromPDF(buffer) {
-  if (!buffer || !Buffer.isBuffer(buffer)) {
-    throw new Error('PDF buffer is required');
-  }
-
-  try {
-    const text = await extractWithPdf2Json(buffer);
-    if (text && text.trim().length > 50) {
-      return text;
-    }
-  } catch (error) {}
-  try {
-    const text = await extractWithPdfParse(buffer);
-    return text;
-  } catch (error) {
-    throw new Error('Both PDF extraction methods failed. pdf-parse error: ' + error.message);
-  }
-}
-
-async function extractWithPdf2Json(buffer) {
-  return new Promise((resolve, reject) => {
-    const pdfParser = new PDFParser(null, 1);
-    
-    pdfParser.on('pdfParser_dataError', (errData) => {
-      reject(new Error('PDF parsing error: ' + errData.parserError));
-    });
-    
-    pdfParser.on('pdfParser_dataReady', (pdfData) => {
-      try {
-        let fullText = '';
-        const totalPages = pdfData.Pages?.length || 0;
-        
-        if (totalPages === 0) {
-          reject(new Error('No pages found in PDF'));
-          return;
-        }
-        
-        for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-          const page = pdfData.Pages[pageIndex];
-          
-          if (page.Texts && page.Texts.length > 0) {
-            const lines = {};
-            const lineThreshold = 0.5;
-            
-            page.Texts.forEach((textObj) => {
-              if (textObj.R && textObj.R.length > 0) {
-                let text = '';
-                textObj.R.forEach((run) => {
-                  if (run.T) {
-                    try {
-                      text += decodeURIComponent(run.T);
-                    } catch (e) {
-                      text += run.T;
-                    }
-                  }
-                });
-                
-                text = text.replace(/\s+/g, ' ').trim();
-                if (!text) return;
-                
-                const y = Math.round(textObj.y * 100) / 100;
-                const x = textObj.x || 0;
-                let lineKey = y.toString();
-                for (const existingY of Object.keys(lines)) {
-                  if (Math.abs(parseFloat(existingY) - y) < lineThreshold) {
-                    lineKey = existingY;
-                    break;
-                  }
-                }
-                
-                if (!lines[lineKey]) {
-                  lines[lineKey] = [];
-                }
-                
-                lines[lineKey].push({
-                  x: x,
-                  text: text,
-                  fontSize: textObj.R[0].TS?.[1] || 12,
-                  isBold: textObj.R[0].TS?.[2] === 1
-                });
-              }
-            });
-            
-            const sortedLineKeys = Object.keys(lines).sort((a, b) => parseFloat(a) - parseFloat(b));
-            
-            sortedLineKeys.forEach((lineKey) => {
-              const lineTexts = lines[lineKey];
-              lineTexts.sort((a, b) => a.x - b.x);
-              
-              let lineContent = '';
-              let prevX = -1;
-              let prevWidth = 0;
-              
-              lineTexts.forEach((textItem) => {
-                const { text, x } = textItem;
-                
-                if (prevX !== -1) {
-                  const xDiff = x - (prevX + prevWidth);
-                  if (xDiff > 4) {
-                    lineContent += '    ';
-                  } else if (xDiff > 1.5) {
-                    lineContent += ' ';
-                  } else if (xDiff > 0.3) {
-                    lineContent += ' ';
-                  } else if (xDiff > 0.05) {
-                    lineContent += ' ';
-                  }
-                }
-                
-                lineContent += text;
-                const charWidth = (textItem.fontSize / 12) * 0.6;
-                const estimatedWidth = text.length * charWidth;
-                prevX = x;
-                prevWidth = estimatedWidth;
-              });
-              
-              const trimmedLine = lineContent.trim();
-              if (trimmedLine) {
-                fullText += trimmedLine + '\n';
-              }
-            });
-            
-            if (pageIndex < totalPages - 1) {
-              fullText += '\n';
-            }
-          }
-        }
-
-        const processedText = processExtractedText(fullText);
-        resolve(processedText);
-      } catch (error) {
-        reject(new Error('Failed to process PDF data: ' + error.message));
-      }
-    });
-    
-    pdfParser.parseBuffer(buffer);
-  });
-}
-
-async function extractWithPdfParse(buffer) {
-  try {
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = pdfParseModule.default || pdfParseModule;
-    const data = await pdfParse(buffer);
-    const processedText = processExtractedText(data.text);
-    return processedText;
-  } catch (error) {
-    throw new Error('pdf-parse extraction failed: ' + error.message);
-  }
-}
-
-function processExtractedText(rawText) {
-  let text = rawText;
-  text = text.replace(/([a-z])([A-Z])/g, '$1 $2');
-  text = text.replace(/(PROFESSIONAL)(SUMMARY)/gi, '$1 $2');
-  text = text.replace(/(TECHNICAL)(SKILLS)/gi, '$1 $2');
-  text = text.replace(/(WORK)(EXPERIENCE)/gi, '$1 $2');
-  text = text.replace(/(PROFESSIONAL)(EXPERIENCE)/gi, '$1 $2');
-  text = text.replace(/(POSITION)(OF)(RESPONSIBILITY)/gi, '$1 $2 $3');
-  text = text.replace(/([a-zA-Z])(\()/g, '$1 $2');
-  text = text.replace(/,(?=[^\s])/g, ', ');
-  text = text.replace(/\|/g, ' | ');
-  
-  const lines = text.split('\n');
-  let processedText = '';
-  let previousWasHeader = false;
-  let previousLine = '';
-
-  for (let i = 0; i < lines.length; i++) {
-    let currentLine = lines[i].trim();
-    
-    if (!currentLine) {
-      if (previousLine) {
-        processedText += '\n';
-        previousLine = '';
-      }
-      continue;
-    }
-    
-    if (isHeaderLine(currentLine)) {
-      if (processedText.length > 0 && !previousWasHeader) {
-        processedText += '\n';
-      }
-      processedText += currentLine + '\n';
-      previousWasHeader = true;
-      previousLine = currentLine;
-    } else {
-      processedText += currentLine + '\n';
-      previousWasHeader = false;
-      previousLine = currentLine;
-    }
-  }
-
-  processedText = processedText.replace(/\n{3,}/g, '\n\n');
-  return processedText.trim();
-}
-
-const isHeaderLine = (line) => {
-  const headerPatterns = [
-    /^PROFESSIONAL\s+SUMMARY$/i,
-    /^SUMMARY$/i,
-    /^TECHNICAL\s+SKILLS$/i,
-    /^SKILLS$/i,
-    /^EDUCATION$/i,
-    /^EXPERIENCE$/i,
-    /^WORK\s+EXPERIENCE$/i,
-    /^PROFESSIONAL\s+EXPERIENCE$/i,
-    /^PROJECTS$/i,
-    /^POSITION\s+OF\s+RESPONSIBILITY$/i,
-    /^CERTIFICATIONS?$/i,
-    /^ACHIEVEMENTS?$/i,
-    /^AWARDS?$/i,
-    /^LANGUAGES?$/i,
-    /^INTERESTS?$/i,
-    /^REFERENCES?$/i
-  ];
-  
-  return headerPatterns.some(pattern => pattern.test(line.trim()));
-};
-
-
 async function generateTailoredResume(resumeText, jobDescription) {
   try {
     const prompt = resumePrompt(resumeText, jobDescription);
@@ -272,481 +52,11 @@ async function generateTailoredResume(resumeText, jobDescription) {
       }
     }
 
-    const text = response.text();
-    return text;
+    return response.text();
   } catch (error) {
     throw new Error('Failed to generate tailored resume: ' + error.message);
   }
 }
-
-function filterUnwantedContent(text) {
-  if (!text) return text;
-  
-  let filtered = text.replace(/Cloudinary\s*,\s*and\s+state\s+management\s+using\s+Redux/gi, '');
-  filtered = filtered.replace(/Cloudinary\s*,\s*state\s+management\s+using\s+Redux/gi, '');
-  filtered = filtered.replace(/Cloudinary/gi, '');
-  filtered = filtered.replace(/state\s+management\s+using\s+Redux/gi, '');
-  filtered = filtered.replace(/,\s*state\s+management\s+using\s+Redux/gi, '');
-  filtered = filtered.replace(/state\s+management\s+using\s+Redux\s*,/gi, '');
-  filtered = filtered.replace(/,\s*,/g, ',');
-  filtered = filtered.replace(/^\s*,\s*|\s*,\s*$/g, '');
-  filtered = filtered.replace(/\s+/g, ' ').trim();
-  
-  return filtered;
-}
-
-function parseResumeData(resumeText) {
-  const lines = resumeText.split('\n').filter(line => line.trim());
-  const resumeData = {
-    name: '',
-    title: '',
-    contact: {
-      phone: '',
-      email: '',
-      linkedin: '',
-      location: '',
-      github: ''
-    },
-    summary: '',
-    skills: [],
-    technologies: [],
-    experience: [],
-    education: [],
-    projects: [],
-    responsibilities: [],
-    certifications: []
-  };
-
-  let currentSection = '';
-  let currentExperience = null;
-  let currentEducation = null;
-  let currentProject = null;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    const upperLine = line.toUpperCase();
-
-    if (!line) continue;
-
-    if (!resumeData.name && i < 5 && line.length > 2 && line.length < 50 && 
-        !line.includes('@') && !line.includes('http') && !line.match(/^\+?\d/) && !line.includes('(')) {
-      resumeData.name = line;
-      continue;
-    }
-
-    if ((line.includes('@') || line.includes('|') || line.match(/\(\+\d+\)/)) && !currentSection) {
-      if (line.includes('|')) {
-        const parts = line.split('|').map(p => p.trim());
-        
-        parts.forEach(part => {
-          if (!resumeData.contact.phone && part.match(/\(\+\d+\)/)) {
-            const phoneMatch = part.match(/\((\+\d+)\)\s*(\d+)/);
-            if (phoneMatch) {
-              resumeData.contact.phone = `(${phoneMatch[1]}) ${phoneMatch[2]}`;
-            } else {
-              resumeData.contact.phone = extractPhone(part);
-            }
-          }
-          if (!resumeData.contact.email && part.includes('@')) {
-            resumeData.contact.email = extractEmail(part);
-          }
-          if (!resumeData.contact.linkedin && (part.toLowerCase().includes('linkedin') || part.includes('linkedin.com'))) {
-            if (part.includes('linkedin.com')) {
-              resumeData.contact.linkedin = extractLinkedIn(part);
-            } else if (part.toLowerCase().includes('linkedin')) {
-              resumeData.contact.linkedin = 'LinkedIn';
-            }
-          }
-          if (!resumeData.contact.github && (part.toLowerCase().includes('github') || part.includes('github.com'))) {
-            if (part.includes('github.com')) {
-              resumeData.contact.github = extractGitHub(part);
-            } else if (part.toLowerCase().includes('github')) {
-              resumeData.contact.github = 'GitHub';
-            }
-          }
-        });
-        
-        continue;
-      } else {
-        if (line.includes('@') && !resumeData.contact.email) {
-          resumeData.contact.email = extractEmail(line);
-          continue;
-        }
-        if (line.match(/\(\+\d+\)/) && !resumeData.contact.phone) {
-          resumeData.contact.phone = extractPhone(line);
-          continue;
-        }
-        if (line.includes('linkedin.com') && !resumeData.contact.linkedin) {
-          resumeData.contact.linkedin = extractLinkedIn(line);
-          continue;
-        }
-        if (line.includes('github.com') && !resumeData.contact.github) {
-          resumeData.contact.github = extractGitHub(line);
-          continue;
-        }
-      }
-    }
-    
-    if (!resumeData.contact.location && line.match(/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*,\s*[A-Z][a-z]+/) && !line.includes('http') && !line.includes('@') && !line.includes('|')) {
-      resumeData.contact.location = line;
-      continue;
-    }
-
-    const normalizedLine = upperLine.replace(/\s+/g, ' ').trim();
-    
-    if (normalizedLine === 'PROFESSIONAL SUMMARY' || 
-        (normalizedLine.includes('PROFESSIONAL') && normalizedLine.includes('SUMMARY') && !normalizedLine.includes('EXPERIENCE'))) {
-      currentSection = 'summary';
-      continue;
-    } else if (normalizedLine === 'TECHNICAL SKILLS' || 
-               (normalizedLine.includes('TECHNICAL') && normalizedLine.includes('SKILLS'))) {
-      currentSection = 'skills';
-      continue;
-    } else if (normalizedLine === 'EXPERIENCE' || 
-               normalizedLine.startsWith('EXPERIENCE') ||
-               normalizedLine === 'WORK EXPERIENCE' || 
-               normalizedLine === 'PROFESSIONAL EXPERIENCE' ||
-               normalizedLine.startsWith('EXPERIENCE (INTERNSHIPS)')) {
-      currentSection = 'experience';
-      continue;
-    } else if (normalizedLine === 'EDUCATION') {
-      currentSection = 'education';
-      continue;
-    } else if (normalizedLine === 'PROJECTS') {
-      currentSection = 'projects';
-      continue;
-    } else if (normalizedLine === 'POSITION OF RESPONSIBILITY' || 
-               normalizedLine.includes('POSITION') && normalizedLine.includes('RESPONSIBILITY')) {
-      currentSection = 'responsibility';
-      continue;
-    } else if (normalizedLine.includes('CERTIFICATION')) {
-      currentSection = 'certifications';
-      continue;
-    }
-
-    switch (currentSection) {
-      case 'summary':
-        if (line.length > 20 && !upperLine.includes('TECHNICAL') && !upperLine.includes('SKILLS') && !upperLine.includes('EDUCATION')) {
-          const filteredLine = filterUnwantedContent(line);
-          if (filteredLine && filteredLine.length > 0) {
-            resumeData.summary += (resumeData.summary ? ' ' : '') + filteredLine;
-          }
-        }
-        break;
-
-      case 'skills':
-        if (line.includes(':')) {
-          const colonIndex = line.indexOf(':');
-          const category = line.substring(0, colonIndex).trim();
-          const content = line.substring(colonIndex + 1).trim();
-          
-          if (content) {
-            const filteredContent = filterUnwantedContent(content);
-            if (!filteredContent) continue;
-            
-            const items = filteredContent.split(',').map(s => filterUnwantedContent(s.trim())).filter(s => s && s.length > 0);
-            
-            if (category.toLowerCase().includes('language')) {
-              resumeData.skills.push(...items);
-            } else if (category.toLowerCase().includes('frontend')) {
-              resumeData.technologies.push(...items);
-            } else if (category.toLowerCase().includes('backend')) {
-              resumeData.technologies.push(...items);
-            } else if (category.toLowerCase().includes('cloud')) {
-              resumeData.technologies.push(...items);
-            } else if (category.toLowerCase().includes('testing')) {
-              resumeData.skills.push(...items);
-            } else if (category.toLowerCase().includes('dev tool') || category.toLowerCase().includes('developer tool')) {
-              resumeData.skills.push(...items);
-            } else if (category.toLowerCase().includes('other')) {
-              resumeData.technologies.push(...items);
-            } else {
-              resumeData.technologies.push(...items);
-            }
-          }
-        }
-        else if (!upperLine.includes('EDUCATION') && !upperLine.includes('EXPERIENCE') && 
-                !upperLine.includes('PROJECTS') && !line.includes('Government') &&
-                line.length < 100 && !line.includes('•') && !line.includes('|')) {
-          if (line.length > 2 && line.length < 80) {
-            const filteredLine = filterUnwantedContent(line);
-            if (filteredLine && filteredLine.length > 0) {
-              resumeData.skills.push(filteredLine);
-            }
-          }
-        }
-        break;
-
-      case 'experience':
-        if (line.length > 5 && line.length < 200 && !line.startsWith('•') && !line.startsWith('-') && !line.match(/^\d+%/)) {
-          if (line.includes('|')) {
-            if (currentExperience) {
-              resumeData.experience.push(currentExperience);
-            }
-            
-            const parts = line.split('|').map(p => p.trim());
-            const title = parts[0] || '';
-            const remaining = parts.slice(1).join(' | ').trim();
-            
-            let company = '';
-            let duration = '';
-            
-            const durationPatterns = [
-              /\(([A-Z][a-z]+\s*\d{4}\s*[–-]\s*[A-Z][a-z]+\s*\d{4})\)/,
-              /([A-Z][a-z]+\s+\d{4}\s*[–-]\s*[A-Z][a-z]+\s+\d{4})/,
-              /([A-Z][a-z]+\s*\d{4}\s*[–-]\s*[A-Z][a-z]+\s*\d{4})/
-            ];
-            
-            let durationMatch = null;
-            for (const pattern of durationPatterns) {
-              durationMatch = remaining.match(pattern);
-              if (durationMatch) break;
-            }
-            
-            if (durationMatch) {
-              duration = durationMatch[1].trim();
-              company = remaining.replace(durationMatch[0], '').trim();
-              company = company.replace(/^\(LOR\)/i, '').trim();
-            } else {
-              company = remaining;
-            }
-            
-            currentExperience = {
-              title: title.trim(),
-              company: company.trim(),
-              duration: duration.trim(),
-              description: []
-            };
-          }
-        } else if (currentExperience && (line.startsWith('•') || line.startsWith('-'))) {
-          const description = filterUnwantedContent(line.replace(/^[•\-]\s*/, '').trim());
-          if (description && description.length > 0) {
-            currentExperience.description.push(description);
-          }
-        }
-        break;
-
-      case 'education':
-        if (line.length > 10 && (line.includes('College') || line.includes('University') || 
-            line.includes('School') || line.includes('Institute') || 
-            line.includes('Government') || line.match(/[A-Z][a-z]+\s+[A-Z][a-z]+,\s*[A-Z][a-z]+/))) {
-          
-          if (currentEducation) {
-            resumeData.education.push(currentEducation);
-          }
-          
-          let institution = line;
-          let location = '';
-          
-          if (line.includes(',')) {
-            const parts = line.split(',').map(p => p.trim());
-            if (parts.length >= 2) {
-              institution = parts[0];
-              location = parts[parts.length - 1];
-              if (parts.length > 2) {
-                location = parts.slice(1).join(', ');
-              }
-            }
-          } else {
-            const locationMatch = line.match(/^(.+?)\s{2,}([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)$/);
-            if (locationMatch) {
-              institution = locationMatch[1].trim();
-              location = locationMatch[2].trim();
-            }
-          }
-          
-          institution = institution.replace(/([a-z])([A-Z])/g, '$1 $2');
-          
-          currentEducation = {
-            institution: institution.trim(),
-            location: location.trim(),
-            degree: '',
-            year: '',
-            grade: ''
-          };
-        } else if (currentEducation) {
-          if (line.includes('B. Tech') || line.includes('Bachelor') || line.includes('B.Tech') || line.includes('Tech')) {
-            const cgpaMatch = line.match(/([\d.]+)\s*CGPA/i);
-            if (cgpaMatch) {
-              currentEducation.grade = `${cgpaMatch[1]} CGPA`;
-              currentEducation.degree = line.replace(/\s*[\d.]+\s*CGPA.*/i, '').trim();
-            } else {
-              currentEducation.degree = line;
-            }
-            currentEducation.degree = currentEducation.degree.replace(/([a-z])([A-Z])/g, '$1 $2');
-          } else if (line.includes('Diploma') || line.includes('SSC')) {
-            currentEducation.degree = line;
-          } else if (line.includes('CGPA') || line.includes('GPA')) {
-            currentEducation.grade = line;
-          } else if (line.match(/[A-Z][a-z]+\s*\d{4}\s*[–-]\s*[A-Z][a-z]+\s*\d{4}/) || 
-                     line.match(/\d{4}\s*[–-]\s*\d{4}/)) {
-            currentEducation.year = line.replace(/([A-Z][a-z]+)(\d{4})/g, '$1 $2').trim();
-          }
-        }
-        break;
-
-      case 'projects':
-        if (line.length > 2 && !line.startsWith('•') && !line.startsWith('-')) {
-          if (line.includes('|') || (!isHeaderLine(line) && line.length < 100 && !line.includes('@') && !line.includes('http') && !line.startsWith('-'))) {
-            if (line.includes('|')) {
-              if (currentProject) {
-                resumeData.projects.push(currentProject);
-              }
-              
-              const parts = line.split('|').map(p => p.trim());
-              const projectName = parts[0] || '';
-              let technologies = [];
-              
-              for (let j = 1; j < parts.length; j++) {
-                const part = parts[j];
-                if (part.toLowerCase().includes('live-link') || 
-                    part.toLowerCase().includes('github-link') ||
-                    part.match(/\d+\+\s*(active|users)/i)) {
-                  continue;
-                }
-                if (part.toLowerCase().includes('stack') || 
-                    part.includes(',') || 
-                    part.match(/(api|js|react|node|mongo|express|sql|websocket|socket)/i)) {
-                  technologies = part.split(',').map(t => filterUnwantedContent(t.trim())).filter(t => t && t.length > 0 && !t.toLowerCase().includes('link'));
-                  break;
-                }
-              }
-              
-              currentProject = {
-                name: projectName.trim(),
-                technologies: technologies,
-                description: [],
-                links: []
-              };
-            } else {
-              if (currentProject) {
-                resumeData.projects.push(currentProject);
-              }
-              if (!line.startsWith('-')) {
-                currentProject = {
-                  name: line.trim(),
-                  technologies: [],
-                  description: [],
-                  links: []
-                };
-              }
-            }
-          }
-        } else if (currentProject && (line.startsWith('•') || (line.startsWith('-') && !line.match(/^-\s*[A-Z]/)))) {
-          const description = filterUnwantedContent(line.replace(/^[•\-]\s*/, '').trim());
-          if (description && description.length > 0) {
-            currentProject.description.push(description);
-          }
-        }
-        break;
-      
-      case 'responsibility':
-        if (line.startsWith('-') && line.length > 10) {
-          const content = line.substring(1).trim();
-          let title = '';
-          let organization = '';
-          let description = '';
-          
-          const dashMatch = content.match(/^(.+?)[–-]\s*(.+)$/);
-          const colonMatch = content.match(/^(.+?):\s*(.+)$/);
-          
-          if (dashMatch) {
-            const beforeDash = dashMatch[1].trim();
-            description = dashMatch[2].trim();
-            
-            if (beforeDash.includes(',')) {
-              const parts = beforeDash.split(',').map(p => p.trim());
-              title = parts[0] || '';
-              organization = parts.slice(1).join(', ') || '';
-            } else {
-              title = beforeDash;
-            }
-          } else if (colonMatch) {
-            const beforeColon = colonMatch[1].trim();
-            description = colonMatch[2].trim();
-            
-            if (beforeColon.includes(',')) {
-              const parts = beforeColon.split(',').map(p => p.trim());
-              title = parts[0] || '';
-              organization = parts.slice(1).join(', ') || '';
-            } else {
-              title = beforeColon;
-            }
-          } else {
-            if (content.includes(',')) {
-              const parts = content.split(',').map(p => p.trim());
-              title = parts[0] || '';
-              organization = parts.slice(1).join(', ') || '';
-            } else {
-              title = content;
-            }
-          }
-          
-          let fullDescription = description;
-          if (i + 1 < lines.length) {
-            const nextLine = lines[i + 1].trim();
-            if (!nextLine.startsWith('-') && !isHeaderLine(nextLine) && nextLine.length > 0) {
-              fullDescription += ' ' + nextLine;
-              i++;
-            }
-          }
-          
-          resumeData.responsibilities.push({
-            title: title.trim(),
-            organization: organization.trim(),
-            description: fullDescription.trim()
-          });
-        }
-        break;
-
-      case 'certifications':
-        if (line.length > 5 && line.length < 80) {
-          resumeData.certifications.push(line);
-        }
-        break;
-    }
-  }
-
-  if (currentExperience) resumeData.experience.push(currentExperience);
-  if (currentProject) resumeData.projects.push(currentProject);
-  if (currentEducation) resumeData.education.push(currentEducation);
-
-  resumeData.projects = resumeData.projects.filter(project => {
-    return project && project.name && project.name.trim().length > 0;
-  });
-  
-  const seenProjects = new Set();
-  resumeData.projects = resumeData.projects.filter(project => {
-    const name = project.name.trim();
-    if (seenProjects.has(name)) {
-      return false;
-    }
-    seenProjects.add(name);
-    return true;
-  });
-
-  return resumeData;
-  function extractEmail(line) {
-    const emailMatch = line.match(/[\w\.-]+@[\w\.-]+\.\w+/);
-    return emailMatch ? emailMatch[0] : '';
-  }
-
-  function extractPhone(line) {
-    const phoneMatch = line.match(/\(\+\d+\)\s*\d+|\+\d{1,3}\s*\d{10}/);
-    return phoneMatch ? phoneMatch[0] : '';
-  }
-
-  function extractLinkedIn(line) {
-    const linkedinMatch = line.match(/https?:\/\/.*linkedin\.com\/[^\s]*/);
-    return linkedinMatch ? linkedinMatch[0] : '';
-  }
-
-  function extractGitHub(line) {
-    const githubMatch = line.match(/https?:\/\/.*github\.com\/[^\s]*/);
-    return githubMatch ? githubMatch[0] : '';
-  }
-}
-
 
 // Builds the PDF entirely in memory and resolves with a Buffer.
 // Avoids any filesystem writes so this works on serverless runtimes.
@@ -798,22 +108,15 @@ async function createATSFriendlyPDF(resumeData) {
         rightY = leftY;
       }
 
-      let contactInfo = [];
-      if (resumeData.contact.phone) contactInfo.push(resumeData.contact.phone);
-      if (resumeData.contact.email) contactInfo.push(resumeData.contact.email);
-      if (resumeData.contact.linkedin) contactInfo.push(resumeData.contact.linkedin);
-      if (resumeData.contact.location) contactInfo.push(resumeData.contact.location);
-
-      if (contactInfo.length > 0) {
-        const contactText = contactInfo.join(' | ');
-        doc.fontSize(10).font('Helvetica').fillColor(lightGray)
-           .text(contactText, doc.page.margins.left, leftY, {
-             width: pageWidth,
-             align: 'left',
-             ellipsis: true,
-             lineGap: 2
-           });
-        leftY += doc.heightOfString(contactText, { width: pageWidth }) + 5;
+      const contactHeight = drawContactLine(doc, resumeData.contact, {
+        x: doc.page.margins.left,
+        y: leftY,
+        width: pageWidth,
+        linkColor: primaryColor,
+        plainColor: lightGray,
+      });
+      if (contactHeight > 0) {
+        leftY += contactHeight + 5;
         rightY = leftY;
       }
 
@@ -980,17 +283,17 @@ async function createATSFriendlyPDF(resumeData) {
 
       if (resumeData.projects.length > 0) {
         rightY = addSectionHeader(doc, 'PROJECTS', rightColumnX, rightY, primaryColor);
-        
+
         resumeData.projects.forEach(project => {
           if (project.name) {
-            doc.fontSize(11).font('Helvetica-Bold').fillColor(textColor)
-               .text(project.name, rightColumnX, rightY, { 
-                 width: rightColumnWidth,
-                 align: 'left',
-                 ellipsis: false,
-                 break: true
-               });
-            rightY += doc.heightOfString(project.name, { width: rightColumnWidth }) + 8;
+            const headerHeight = drawProjectHeader(doc, project, {
+              x: rightColumnX,
+              y: rightY,
+              width: rightColumnWidth,
+              textColor,
+              linkColor: primaryColor,
+            });
+            rightY += headerHeight + 8;
           }
 
           if (project.description && project.description.length > 0) {
@@ -998,12 +301,14 @@ async function createATSFriendlyPDF(resumeData) {
               const cleanDesc = desc.trim();
               if (cleanDesc) {
                 doc.fontSize(10).font('Helvetica').fillColor(textColor)
-                   .text(`• ${cleanDesc}`, rightColumnX, rightY, { 
+                   .text(`• ${cleanDesc}`, rightColumnX, rightY, {
                      width: rightColumnWidth,
                      align: 'left',
                      lineGap: 3,
                      ellipsis: false,
-                     break: true
+                     break: true,
+                     link: null,
+                     underline: false,
                    });
                 rightY += doc.heightOfString(`• ${cleanDesc}`, { width: rightColumnWidth, lineGap: 3 }) + 5;
               }
@@ -1052,12 +357,32 @@ export const createNewResume = async (req, res) => {
       });
     }
 
-    const resumeText = await extractTextFromPDF(resumeFile.buffer);
-    const tailoredResumeText = await generateTailoredResume(resumeText, jobDescription);
-    const resumeData = parseResumeData(tailoredResumeText);
+    const reqStart = Date.now();
+    const stage = (label, t0) =>
+      console.log(`[createNewResume] ${label} took ${Date.now() - t0}ms`);
 
+    let t0 = Date.now();
+    const { text: resumeText, links: extractedLinks } = await extractTextFromPDF(
+      resumeFile.buffer,
+    );
+    stage(`pdf-extract (chars=${resumeText.length}, links=${extractedLinks?.length || 0})`, t0);
+
+    t0 = Date.now();
+    console.log('[createNewResume] generating tailored resume via LLM...');
+    const tailoredRaw = await generateTailoredResume(resumeText, jobDescription);
+    stage(`llm-generate (chars=${tailoredRaw.length})`, t0);
+
+    t0 = Date.now();
+    const tailoredResumeText = sanitizeResumeTextForParsing(tailoredRaw);
+    const resumeData = parseResumeData(tailoredResumeText, extractedLinks);
+    stage('parse', t0);
+
+    t0 = Date.now();
     const pdfBuffer = await createATSFriendlyPDF(resumeData);
+    stage(`pdf-render (bytes=${pdfBuffer.length})`, t0);
+
     const outputFileName = `tailored-resume-${Date.now()}.pdf`;
+    console.log(`[createNewResume] total elapsed=${Date.now() - reqStart}ms`);
 
     // Persist the resume only when the request is authenticated. Anonymous
     // generations still succeed but won't show up in the dashboard or be

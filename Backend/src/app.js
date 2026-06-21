@@ -10,6 +10,7 @@ const app = express();
 
 const corsOrigins = [
   process.env.CLIENT_URL,
+  "https://jobresumeai.vercel.app",
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:8080",
@@ -17,7 +18,7 @@ const corsOrigins = [
 
 app.use(
   cors({
-    origin: corsOrigins.length ? corsOrigins : true,
+    origin: corsOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     exposedHeaders: ["X-Resume-Filename", "X-Resume-Id", "Content-Disposition"],

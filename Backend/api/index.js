@@ -21,10 +21,6 @@ let appPromise;
 let loadError = null;
 
 try {
-  // Dynamic import so a synchronous throw during module evaluation becomes
-  // a rejected promise we can convert into a real HTTP 500 response (with
-  // the actual error message), instead of Vercel surfacing a generic
-  // FUNCTION_INVOCATION_FAILED page.
   appPromise = import("../src/index.js")
     .then((mod) => mod.default)
     .catch((err) => {

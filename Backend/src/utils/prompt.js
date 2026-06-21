@@ -50,7 +50,8 @@ FORMATTING REQUIREMENTS:
 - Keep the same number of lines and sections
 
 OUTPUT FORMAT:
-Return ONLY the tailored resume text in the EXACT same format as the input. Start with the candidate's name and end with the last line of the original resume. No explanations, no comments, no additional text.
+Return ONLY the tailored resume text in the EXACT same format as the input. Start with the candidate's name and end with the last line of the original resume.
+Do NOT add explanations, comments, or delimiter lines (no ---END RESUME--- or similar markers).
 
 TAILORED RESUME:
 `;
