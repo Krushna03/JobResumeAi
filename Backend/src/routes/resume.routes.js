@@ -9,10 +9,13 @@ import {
 } from "../controller/resume.controller.js";
 import { optionalJWT, verifyJWT } from "../middleware/auth.middleware.js";
 import { upload } from "../middleware/multer.middleware.js";
+import { generateResumeLimiter } from "../middleware/rateLimit.middleware.js";
 
 const router = express.Router();
 
-router.route("/generate-resume").post(optionalJWT, upload.single("resume"), createNewResume);
+router
+  .route("/generate-resume")
+  .post(generateResumeLimiter, optionalJWT, upload.single("resume"), createNewResume);
 
 // Read endpoints — all require auth so users only ever see their own data.
 router.route("/mine").get(verifyJWT, listMyResumes);
