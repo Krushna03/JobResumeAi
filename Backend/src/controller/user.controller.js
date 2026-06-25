@@ -46,7 +46,7 @@ const register = async (req, res) => {
       .json({
         success: true,
         message: "Account created successfully.",
-        data: { user: safeUser, accessToken },
+        data: { user: safeUser },
       });
   } catch (error) {
     console.error("register:", error);
@@ -93,7 +93,7 @@ const login = async (req, res) => {
       .json({
         success: true,
         message: "Signed in successfully.",
-        data: { user: loggedInUser, accessToken },
+        data: { user: loggedInUser },
       });
   } catch (error) {
     console.error("login:", error);

@@ -74,14 +74,29 @@ export function matchContactLinks(uniqueLinks, contact) {
   return contact;
 }
 
-export function matchLinksToProjects(uniqueLinks, projects) {
+export function matchLinksToProjects(uniqueLinks, projects, contact = {}) {
   if (!uniqueLinks.length || !projects.length) return projects;
+
+  const contactUrls = new Set(
+    [
+      contact.linkedin,
+      contact.github,
+      contact.portfolio,
+      contact.email ? `mailto:${contact.email}` : null
+    ]
+      .filter(Boolean)
+      .map(u => u.toLowerCase().trim().replace(/\/+$/, ""))
+  );
 
   const contactHosts = ["linkedin.com", "mailto:"];
 
   for (const linkObj of uniqueLinks) {
     const uri = linkObj.uri || linkObj;
-    const lower = uri.toLowerCase();
+    const lower = uri.toLowerCase().trim();
+    const normalizedLower = lower.replace(/\/+$/, "");
+
+    if (contactUrls.has(normalizedLower)) continue;
+
     if (contactHosts.some((h) => lower.includes(h))) continue;
     if (lower.includes("github.com") && !lower.includes("/")) continue;
 
@@ -105,7 +120,9 @@ export function matchLinksToProjects(uniqueLinks, projects) {
       }
     });
 
-    const targetIdx = bestScore > 0 ? bestIdx : 0;
+    if (bestScore === 0) continue;
+
+    const targetIdx = bestIdx;
     if (targetIdx < 0) continue;
 
     const proj = projects[targetIdx];

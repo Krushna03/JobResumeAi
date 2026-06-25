@@ -189,7 +189,7 @@ export function parseResumeData(resumeText, extractedLinks = []) {
 
   const uniqueLinks = processLinks(sanitized, extractedLinks);
   resumeData.contact = matchContactLinks(uniqueLinks, resumeData.contact);
-  resumeData.projects = matchLinksToProjects(uniqueLinks, resumeData.projects);
+  resumeData.projects = matchLinksToProjects(uniqueLinks, resumeData.projects, resumeData.contact);
 
   return resumeData;
 }
@@ -267,23 +267,29 @@ function parseSkillsLine(resumeData, line, upperLine) {
 }
 
 function parseEducationLine(resumeData, line, currentEducation) {
-  if (
-    line.length > 10 &&
-    (line.includes("College") ||
-      line.includes("University") ||
-      line.includes("School") ||
-      line.includes("Institute") ||
-      line.includes("Government") ||
-      line.match(/[A-Z][a-z]+\s+[A-Z][a-z]+,\s*[A-Z][a-z]+/))
-  ) {
+  const cols = line.split(/\s{2,}|\t/).map(c => c.trim()).filter(Boolean);
+  const leftCol = cols[0] || "";
+  const rightCol = cols[1] || "";
+
+  const isInstLine =
+    leftCol.length > 10 &&
+    (leftCol.includes("College") ||
+      leftCol.includes("University") ||
+      leftCol.includes("School") ||
+      leftCol.includes("Institute") ||
+      leftCol.includes("Government") ||
+      leftCol.match(/[A-Z][a-z]+\s+[A-Z][a-z]+,\s*[A-Z][a-z]+/));
+
+  if (isInstLine) {
     if (currentEducation) resumeData.education.push(currentEducation);
 
-    let institution = line;
-    let location = "";
-    if (line.includes(",")) {
-      const parts = line.split(",").map((p) => p.trim());
+    let institution = leftCol;
+    let location = rightCol;
+
+    if (!location && institution.includes(",")) {
+      const parts = institution.split(",").map((p) => p.trim());
       institution = parts[0];
-      location = parts.length > 2 ? parts.slice(1).join(", ") : parts[1] || "";
+      location = parts.slice(1).join(", ");
     }
 
     institution = institution.replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -295,32 +301,42 @@ function parseEducationLine(resumeData, line, currentEducation) {
       grade: "",
     };
   } else if (currentEducation) {
+    const contentToCheck = leftCol;
     if (
-      line.includes("B. Tech") ||
-      line.includes("Bachelor") ||
-      line.includes("B.Tech") ||
-      line.includes("Tech")
+      contentToCheck.includes("B. Tech") ||
+      contentToCheck.includes("Bachelor") ||
+      contentToCheck.includes("B.Tech") ||
+      contentToCheck.includes("Tech") ||
+      contentToCheck.includes("Diploma") ||
+      contentToCheck.includes("SSC") ||
+      contentToCheck.includes("HSC")
     ) {
-      const cgpaMatch = line.match(/([\d.]+)\s*CGPA/i);
+      const cgpaMatch = contentToCheck.match(/([\d.]+)\s*CGPA/i);
       if (cgpaMatch) {
         currentEducation.grade = `${cgpaMatch[1]} CGPA`;
-        currentEducation.degree = line.replace(/\s*[\d.]+\s*CGPA.*/i, "").trim();
+        currentEducation.degree = contentToCheck.replace(/\s*[\d.]+\s*CGPA.*/i, "").trim();
       } else {
-        currentEducation.degree = line;
+        currentEducation.degree = contentToCheck;
       }
+      currentEducation.degree = currentEducation.degree.replace(/[-–—,\s]+$/, "").trim();
       currentEducation.degree = currentEducation.degree.replace(
         /([a-z])([A-Z])/g,
         "$1 $2",
       );
-    } else if (line.includes("Diploma") || line.includes("SSC")) {
-      currentEducation.degree = line;
-    } else if (line.includes("CGPA") || line.includes("GPA")) {
-      currentEducation.grade = line;
+
+      if (rightCol) {
+        currentEducation.year = rightCol.replace(/([A-Z][a-z]+)(\d{4})/g, "$1 $2").trim();
+      }
+    } else if (contentToCheck.includes("CGPA") || contentToCheck.includes("GPA")) {
+      currentEducation.grade = contentToCheck;
+      if (rightCol) {
+        currentEducation.year = rightCol.replace(/([A-Z][a-z]+)(\d{4})/g, "$1 $2").trim();
+      }
     } else if (
-      line.match(/[A-Z][a-z]+\s*\d{4}\s*[–-]\s*[A-Z][a-z]+\s*\d{4}/i) ||
-      line.match(/\d{4}\s*[–-]\s*\d{4}/)
+      contentToCheck.match(/[A-Z][a-z]+\s*\d{4}\s*[–-]\s*[A-Z][a-z]+\s*\d{4}/i) ||
+      contentToCheck.match(/\d{4}\s*[–-]\s*\d{4}/)
     ) {
-      currentEducation.year = line.replace(/([A-Z][a-z]+)(\d{4})/g, "$1 $2").trim();
+      currentEducation.year = contentToCheck.replace(/([A-Z][a-z]+)(\d{4})/g, "$1 $2").trim();
     }
   }
   return { currentEducation };

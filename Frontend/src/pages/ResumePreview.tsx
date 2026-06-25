@@ -7,7 +7,7 @@ import { HomeHeader, HomeFooter } from "@/components/home"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { getApiBase, getStoredToken } from "@/lib/api"
+import { apiFetch } from "@/lib/api"
 
 import { SpecialZoomLevel, Viewer, Worker } from "@react-pdf-viewer/core"
 import "@react-pdf-viewer/core/lib/styles/index.css"
@@ -34,13 +34,6 @@ type ResumeMetadata = {
   hasGeneratedPdf: boolean
   createdAt: string
   updatedAt: string
-}
-
-function authedFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  const headers = new Headers(init.headers)
-  const token = getStoredToken()
-  if (token) headers.set("Authorization", `Bearer ${token}`)
-  return fetch(url, { ...init, headers, credentials: "include" })
 }
 
 export default function ResumePreview() {
@@ -81,12 +74,11 @@ export default function ResumePreview() {
     const controller = new AbortController()
     let cancelled = false
 
-    const apiBase = getApiBase()
     const fetchAll = async () => {
       try {
         // 1) Metadata (always fetch — gives us up-to-date JD, file names, etc.)
-        const metaRes = await authedFetch(
-          `${apiBase}/api/v1/resume/${idFromRoute}`,
+        const metaRes = await apiFetch(
+          `/api/v1/resume/${idFromRoute}`,
           { signal: controller.signal },
         )
         if (!metaRes.ok) {
@@ -103,8 +95,8 @@ export default function ResumePreview() {
 
         // 2) Generated PDF — skip if we already have it from navigation state.
         if (!generatedBlob && meta.hasGeneratedPdf) {
-          const pdfRes = await authedFetch(
-            `${apiBase}/api/v1/resume/${meta.id}/pdf`,
+          const pdfRes = await apiFetch(
+            `/api/v1/resume/${meta.id}/pdf`,
             { signal: controller.signal },
           )
           if (pdfRes.ok) {
@@ -115,8 +107,8 @@ export default function ResumePreview() {
 
         // 3) Original PDF — also skip if we already have it.
         if (!originalBlob && meta.hasOriginalPdf) {
-          const origRes = await authedFetch(
-            `${apiBase}/api/v1/resume/${meta.id}/original`,
+          const origRes = await apiFetch(
+            `/api/v1/resume/${meta.id}/original`,
             { signal: controller.signal },
           )
           if (origRes.ok) {
