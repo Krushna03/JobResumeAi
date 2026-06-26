@@ -135,7 +135,80 @@ export const getOriginalResumePdf = async (req, res) => {
   }
 };
 
+// Persist a resume that was already generated anonymously
+export const importExistingResume = async (req, res) => {
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
 
+    const { jobDescription } = req.body;
+    if (!jobDescription || !jobDescription.trim()) {
+      return res
+        .status(400)
+        .json({ error: 'Job description not provided in body' });
+    }
+
+    const originalFile = req.files?.original?.[0];
+    const generatedFile = req.files?.generated?.[0];
+    if (!originalFile?.buffer || !generatedFile?.buffer) {
+      return res.status(400).json({
+        error: 'Both `original` and `generated` PDFs are required',
+      });
+    }
+
+    let originalText = '';
+    try {
+      const extracted = await extractTextFromPDF(originalFile.buffer);
+      originalText = extracted?.text || '';
+    } catch (e) {
+      console.warn(
+        '[importExistingResume] failed to extract original text:',
+        e?.message || e,
+      );
+    }
+
+    const generatedFileName =
+      (typeof req.body.generatedFileName === 'string' &&
+        req.body.generatedFileName.trim()) ||
+      `tailored-resume-${Date.now()}.pdf`;
+
+    const saved = await Resume.create({
+      user: req.user._id,
+      jobDescription,
+      jobTitle: deriveJobTitle(jobDescription),
+      originalText,
+      originalPdf: {
+        data: originalFile.buffer,
+        contentType: originalFile.mimetype || 'application/pdf',
+        fileName: originalFile.originalname || 'resume.pdf',
+        size: originalFile.size || originalFile.buffer.length,
+      },
+      tailoredText: '',
+      parsedData: {},
+      generatedPdf: {
+        data: generatedFile.buffer,
+        contentType: generatedFile.mimetype || 'application/pdf',
+        fileName: generatedFileName,
+        size: generatedFile.size || generatedFile.buffer.length,
+      },
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: saved._id.toString(),
+        generatedFileName: saved.generatedPdf.fileName,
+        originalFileName: saved.originalPdf.fileName,
+      },
+    });
+  } catch (error) {
+    if (res.headersSent) return;
+    return res
+      .status(500)
+      .json({ error: 'Failed to import resume: ' + error.message });
+  }
+};
 
 export const deleteResume = async (req, res) => {
   try {

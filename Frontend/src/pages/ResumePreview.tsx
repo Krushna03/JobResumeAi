@@ -7,13 +7,15 @@ import { HomeHeader, HomeFooter } from "@/components/home"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/AuthContext"
+import { getApiBase, getStoredToken } from "@/lib/api"
+import { getPendingResume, setPendingResume, hasPendingResumeData, type PendingResume } from "@/lib/pendingResume"
 import { apiFetch } from "@/lib/api"
 
 import { SpecialZoomLevel, Viewer, Worker } from "@react-pdf-viewer/core"
 import "@react-pdf-viewer/core/lib/styles/index.css"
 
-const PDF_WORKER_URL =
-  "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js"
+const PDF_WORKER_URL = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js"
 
 type ResumePreviewState = {
   generatedBlob?: Blob
@@ -44,30 +46,51 @@ export default function ResumePreview() {
 
   const state = (location.state ?? {}) as ResumePreviewState
 
-  // ---------- Fast-path: data passed via navigation state ----------
-  // Use it to render immediately while the by-id fetch (if any) loads.
+  const initialState = useMemo<PendingResume>(() => {
+    if (hasPendingResumeData(state)) {
+      const seeded: PendingResume = {
+        generatedBlob: state.generatedBlob,
+        fileName: state.fileName,
+        jobDescription: state.jobDescription,
+        resumeFile: state.resumeFile,
+        resumeFileName: state.resumeFileName,
+        resumeId: state.resumeId,
+      }
+      setPendingResume(seeded)
+      return seeded
+    }
+    return getPendingResume() ?? {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [jobDescription, setJobDescription] = useState<string | undefined>(
-    state.jobDescription,
+    initialState.jobDescription,
   )
   const [generatedFileName, setGeneratedFileName] = useState<string | undefined>(
-    state.fileName,
+    initialState.fileName,
   )
   const [originalFileName, setOriginalFileName] = useState<string | undefined>(
-    state.resumeFileName,
+    initialState.resumeFileName,
   )
   const [generatedBlob, setGeneratedBlob] = useState<Blob | null>(
-    state.generatedBlob ?? null,
+    initialState.generatedBlob ?? null,
   )
   const [originalBlob, setOriginalBlob] = useState<Blob | null>(
-    state.resumeFile ?? null,
+    initialState.resumeFile ?? null,
   )
 
   const [isLoadingMetadata, setIsLoadingMetadata] = useState<boolean>(
-    Boolean(idFromRoute) && !state.generatedBlob,
+    Boolean(idFromRoute) && !initialState.generatedBlob,
   )
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // ---------- Fetch by ID (when arriving via /resume-preview/:id) ----------
+  const [savedResumeId, setSavedResumeId] = useState<string | undefined>(
+    initialState.resumeId ?? idFromRoute,
+  )
+  const [hasAttemptedImport, setHasAttemptedImport] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const { user } = useAuth()
+
   useEffect(() => {
     if (!idFromRoute) return
 
@@ -136,10 +159,112 @@ export default function ResumePreview() {
       cancelled = true
       controller.abort()
     }
-    // We intentionally don't depend on generatedBlob/originalBlob: they're
-    // populated by this effect itself and would cause an infinite loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idFromRoute])
+
+  // Post-login auto-import
+  useEffect(() => {
+    if (hasAttemptedImport || isImporting) return
+    if (!user) return
+    if (savedResumeId) return 
+    if (!generatedBlob || !originalBlob || !jobDescription?.trim()) return
+
+    const importNow = async () => {
+      setIsImporting(true)
+      setHasAttemptedImport(true)
+      try {
+        const resolvedGeneratedName = generatedFileName || "tailored-resume.pdf"
+        const resolvedOriginalName =
+          (originalBlob instanceof File ? originalBlob.name : undefined) ||
+          originalFileName ||
+          "resume.pdf"
+        const originalAsFile =
+          originalBlob instanceof File
+            ? originalBlob
+            : new File([originalBlob], resolvedOriginalName, {
+                type: originalBlob.type || "application/pdf",
+              })
+
+        const formData = new FormData()
+        formData.append("original", originalAsFile, resolvedOriginalName)
+        formData.append("generated", generatedBlob, resolvedGeneratedName)
+        formData.append("jobDescription", jobDescription.trim())
+        formData.append("generatedFileName", resolvedGeneratedName)
+
+        const headers = new Headers()
+        const token = getStoredToken()
+        if (token) headers.set("Authorization", `Bearer ${token}`)
+
+        const res = await fetch(`${getApiBase()}/api/v1/resume/import`, {
+          method: "POST",
+          body: formData,
+          headers,
+          credentials: "include",
+        })
+
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as {
+            error?: string
+            message?: string
+          }
+          throw new Error(data.error || data.message || res.statusText)
+        }
+
+        const json = (await res.json()) as {
+          success: boolean
+          data?: { id: string; generatedFileName?: string; originalFileName?: string }
+        }
+        const newId = json?.data?.id
+        if (!newId) throw new Error("Server did not return a resume id")
+
+        setSavedResumeId(newId)
+        setPendingResume({
+          generatedBlob,
+          fileName: generatedFileName,
+          jobDescription,
+          resumeFile: originalBlob instanceof File ? originalBlob : undefined,
+          resumeFileName: originalFileName,
+          resumeId: newId,
+        })
+
+        navigate(`/resume-preview/${newId}`, {
+          replace: true,
+          state: {
+            generatedBlob,
+            fileName: generatedFileName,
+            jobDescription,
+            resumeFile: originalBlob instanceof File ? originalBlob : undefined,
+            resumeFileName: originalFileName,
+            resumeId: newId,
+          } satisfies ResumePreviewState,
+        })
+      } catch (e) {
+        console.warn("[ResumePreview] auto-import failed:", e)
+        toast({
+          title: "Couldn’t save to your dashboard",
+          description:
+            e instanceof Error ? e.message : "You can still download the file.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsImporting(false)
+      }
+    }
+
+    void importNow()
+  }, [
+    user,
+    savedResumeId,
+    hasAttemptedImport,
+    isImporting,
+    generatedBlob,
+    originalBlob,
+    jobDescription,
+    generatedFileName,
+    originalFileName,
+    navigate,
+    toast,
+  ])
 
   const [generatedFileUrl, setGeneratedFileUrl] = useState<string | null>(null)
   const [originalFileUrl, setOriginalFileUrl] = useState<string | null>(null)
@@ -160,6 +285,26 @@ export default function ResumePreview() {
 
   const handleDownload = () => {
     if (!generatedBlob) return
+
+    if (!getStoredToken()) {
+      setPendingResume({
+        generatedBlob,
+        fileName: generatedFileName,
+        jobDescription,
+        resumeFile: originalBlob instanceof File ? originalBlob : undefined,
+        resumeFileName: originalFileName,
+        resumeId: savedResumeId,
+      })
+      toast({
+        title: "Sign in required",
+        description: "Log in or create an account to download and use this feature.",
+      })
+      navigate("/login", {
+        state: { from: location.pathname + location.search },
+      })
+      return
+    }
+
     const url = URL.createObjectURL(generatedBlob)
     const link = document.createElement("a")
     link.href = url

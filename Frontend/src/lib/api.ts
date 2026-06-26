@@ -1,3 +1,5 @@
+export const AUTH_TOKEN_KEY = import.meta.env.AUTH_TOKEN_KEY || "";
+
 export function getApiBase(): string {
   const raw = import.meta.env.VITE_API_URL;
   let base =
@@ -77,6 +79,15 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     res = await send();
   }
   return res;
+}
+
+export function getStoredToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setStoredToken(token: string | null): void {
+  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+  else localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
 export type ApiUser = {
