@@ -12,7 +12,7 @@ if (!geminiapiKey) {
 const genAI = new GoogleGenerativeAI(geminiapiKey || "");
 
 export const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash-lite",
+  model: "gemini-2.5-flash",
   systemInstruction: systemInstruction,
   generationConfig: {
     maxOutputTokens: 8192,

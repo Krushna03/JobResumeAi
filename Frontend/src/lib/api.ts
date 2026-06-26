@@ -1,4 +1,4 @@
-export const AUTH_TOKEN_KEY = process.env.AUTH_TOKEN_KEY || "";
+export const AUTH_TOKEN_KEY = import.meta.env.AUTH_TOKEN_KEY || "";
 
 export function getApiBase(): string {
   const raw = import.meta.env.VITE_API_URL;
