@@ -1,4 +1,4 @@
-export const AUTH_TOKEN_KEY = "jobresumeai_access_token";
+export const AUTH_TOKEN_KEY = process.env.AUTH_TOKEN_KEY || "";
 
 export function getApiBase(): string {
   const raw = import.meta.env.VITE_API_URL;
@@ -18,6 +18,67 @@ export function getApiBase(): string {
     base = "http://localhost:5000";
   }
   return base;
+}
+
+// --- CSRF (double-submit) ------------------------------------------------
+// Auth lives entirely in an httpOnly cookie, so the SPA holds no access
+// token. To defend cookie-authenticated mutations against CSRF, we fetch a
+// per-session token from /api/csrf, keep it in memory (never localStorage),
+// and echo it back via the X-CSRF-Token header. The server compares it to
+// the httpOnly csrf cookie that cross-site attackers cannot read or forge.
+const CSRF_HEADER = "X-CSRF-Token";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+let csrfToken: string | null = null;
+let csrfRequest: Promise<string | null> | null = null;
+
+export async function ensureCsrfToken(force = false): Promise<string | null> {
+  if (csrfToken && !force) return csrfToken;
+  if (force) csrfToken = null;
+  if (!csrfRequest) {
+    csrfRequest = fetch(`${getApiBase()}/api/csrf`, { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json().catch(() => ({}))) as { csrfToken?: string };
+        csrfToken = data.csrfToken ?? null;
+        return csrfToken;
+      })
+      .catch(() => null)
+      .finally(() => {
+        csrfRequest = null;
+      });
+  }
+  return csrfRequest;
+}
+
+export function clearCsrfToken(): void {
+  csrfToken = null;
+}
+
+/**
+ * fetch wrapper that always sends cookies and attaches the CSRF header for
+ * state-changing requests. On a 403 (stale/missing token) it refreshes the
+ * token once and retries. Use this for non-JSON responses (PDF/blob streams).
+ */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const url = path.startsWith("http") ? path : `${getApiBase()}${path}`;
+
+  const send = async (): Promise<Response> => {
+    const headers = new Headers(init.headers);
+    if (!SAFE_METHODS.has(method)) {
+      const token = await ensureCsrfToken();
+      if (token) headers.set(CSRF_HEADER, token);
+    }
+    return fetch(url, { ...init, headers, credentials: "include" });
+  };
+
+  let res = await send();
+  if (res.status === 403 && !SAFE_METHODS.has(method)) {
+    await ensureCsrfToken(true);
+    res = await send();
+  }
+  return res;
 }
 
 export function getStoredToken(): string | null {
@@ -41,7 +102,6 @@ export type AuthPayload = {
   message?: string;
   data?: {
     user: ApiUser;
-    accessToken: string;
   };
 };
 
@@ -51,14 +111,8 @@ export async function apiJson<T>(path: string, init: RequestInit = {}): Promise<
   if (body && typeof body === "string" && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const token = getStoredToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${getApiBase()}${path}`, {
-    ...init,
-    headers,
-    credentials: "include",
-  });
+  const res = await apiFetch(path, { ...init, headers });
 
   let data: unknown = {};
   const text = await res.text();

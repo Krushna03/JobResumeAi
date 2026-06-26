@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Upload, FileText, ArrowRight, Rocket, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { getApiBase, getStoredToken } from "@/lib/api"
+import { apiFetch } from "@/lib/api"
 
 type GenerateResumeError = {
   error?: string
@@ -73,15 +73,9 @@ export function HomeResumeGenerator() {
       formData.append("resume", resumeFile)
       formData.append("jobDescription", jobDescription.trim())
 
-      const headers = new Headers()
-      const token = getStoredToken()
-      if (token) headers.set("Authorization", `Bearer ${token}`)
-
-      const res = await fetch(`${getApiBase()}/api/v1/resume/generate-resume`, {
+      const res = await apiFetch(`/api/v1/resume/generate-resume`, {
         method: "POST",
         body: formData,
-        headers,
-        credentials: "include",
       })
 
       const contentType = res.headers.get("content-type") || ""

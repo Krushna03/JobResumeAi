@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { apiJson, getApiBase, getStoredToken } from "@/lib/api";
+import { apiFetch, apiJson } from "@/lib/api";
 
 type ResumeListItem = {
   id: string;
@@ -109,13 +109,7 @@ const Dashboard = () => {
   const handleDownload = async (resume: ResumeListItem) => {
     setDownloadingId(resume.id);
     try {
-      const headers = new Headers();
-      const token = getStoredToken();
-      if (token) headers.set("Authorization", `Bearer ${token}`);
-      const res = await fetch(
-        `${getApiBase()}/api/v1/resume/${resume.id}/pdf`,
-        { headers, credentials: "include" },
-      );
+      const res = await apiFetch(`/api/v1/resume/${resume.id}/pdf`);
       if (!res.ok) throw new Error("Could not download this resume.");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

@@ -98,7 +98,7 @@ const verifyGoogleToken = async (req, res) => {
       .json({
         success: true,
         message: "Signed in with Google.",
-        data: { user: safeUser, accessToken },
+        data: { user: safeUser },
       });
   } catch (error) {
     console.error("Google Auth Error:", error);

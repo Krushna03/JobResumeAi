@@ -9,15 +9,13 @@ import {
 } from "react";
 import {
   apiJson,
-  setStoredToken,
-  getStoredToken,
+  clearCsrfToken,
   type ApiUser,
   type AuthPayload,
 } from "@/lib/api";
 
 type AuthContextValue = {
   user: ApiUser | null;
-  token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
@@ -30,37 +28,21 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ApiUser | null>(null);
-  const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [isLoading, setIsLoading] = useState(true);
 
   const applyAuthPayload = useCallback((payload: AuthPayload) => {
     const u = payload.data?.user;
-    const t = payload.data?.accessToken;
-    if (u && t) {
-      setUser(u);
-      setToken(t);
-      setStoredToken(t);
-    }
+    if (u) setUser(u);
   }, []);
 
+  // Auth is cookie-based; ask the server who we are rather than trusting any
+  // client-held token. A 401 simply means anonymous.
   const refreshUser = useCallback(async () => {
-    const t = getStoredToken();
-    if (!t) {
-      setUser(null);
-      setToken(null);
-      setIsLoading(false);
-      return;
-    }
     try {
       const res = await apiJson<{ success: boolean; data: ApiUser }>("/api/v1/users/me");
-      if (res.success && res.data) {
-        setUser(res.data);
-        setToken(t);
-      }
+      setUser(res.success && res.data ? res.data : null);
     } catch {
-      setStoredToken(null);
       setUser(null);
-      setToken(null);
     } finally {
       setIsLoading(false);
     }
@@ -103,15 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* still clear client */
     }
-    setStoredToken(null);
+    clearCsrfToken();
     setUser(null);
-    setToken(null);
   }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      token,
       isLoading,
       login,
       register,
@@ -119,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       refreshUser,
     }),
-    [user, token, isLoading, login, register, loginWithGoogleIdToken, logout, refreshUser]
+    [user, isLoading, login, register, loginWithGoogleIdToken, logout, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,10 +2,13 @@ import express from "express";
 import { createNewResume, importExistingResume, listMyResumes, getResumeById, getGeneratedResumePdf, getOriginalResumePdf, deleteResume } from "../controller/resume.controller.js";
 import { optionalJWT, verifyJWT } from "../middleware/auth.middleware.js";
 import { upload } from "../middleware/multer.middleware.js";
+import { generateResumeLimiter } from "../middleware/rateLimit.middleware.js";
 
 const router = express.Router();
 
-router.route("/generate-resume").post(optionalJWT, upload.single("resume"), createNewResume);
+router
+  .route("/generate-resume")
+  .post(generateResumeLimiter, optionalJWT, upload.single("resume"), createNewResume);
 
 router.route("/import").post(
   verifyJWT,

@@ -7,7 +7,7 @@ import { ThemeToggle } from "@/components/ThemeToggle"
 import { Menu, User, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 const navLinkClass =
-  "text-base text-muted-foreground font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
+  "text-base text-foreground font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
 
 const mobileLinkClass =
   "rounded-lg px-3 py-3 text-base text-foreground/80 hover:bg-white/5 hover:text-foreground"
@@ -39,7 +39,7 @@ export function HomeHeader() {
           : "!border-b-0 border-transparent !bg-transparent shadow-none backdrop-blur-0"
       )}
     >
-      <div className="relative mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 md:h-[4.25rem] lg:px-8">
+      <div className="relative mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 md:h-[4.25rem] lg:px-8">
         <AppLogo
           size="md"
           className={cn(
